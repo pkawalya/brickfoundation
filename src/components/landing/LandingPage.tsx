@@ -1,30 +1,36 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Users, Gift, TrendingUp, ArrowRight, Box, CheckCircle2 } from 'lucide-react';
+import { Building2, Users, Gift, ArrowRight } from 'lucide-react';
+import { Logo } from '../common/Logo';
+import { gradients } from '../../utils/colors';
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-      <nav className="bg-transparent py-6">
+    <div className={`min-h-screen ${gradients.hero}`}>
+      {/* Animated background pattern */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 bg-[url('/auth-pattern.svg')] opacity-5"></div>
+      </div>
+
+      <nav className="relative bg-transparent py-4 sm:py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Box className="h-8 w-8 text-white" />
-              <span className="ml-2 text-2xl font-bold text-white">The Brick Foundation</span>
-            </div>
-            <div className="flex items-center space-x-4">
+            <Logo variant="light" className="transform hover:scale-105 transition-transform duration-200" />
+            <div className="flex items-center space-x-3 sm:space-x-6">
               <Link
-                to="/signin"
-                className="text-white hover:text-indigo-200 transition-colors duration-200"
+                to="/login"
+                className="text-sm font-medium text-white hover:text-indigo-200 transition-colors duration-200"
               >
-                Sign In
+                Sign in
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-full text-indigo-600 bg-white hover:bg-indigo-50 transition-colors duration-200"
+                className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-sm font-medium 
+                  rounded-full text-indigo-600 bg-white hover:bg-indigo-50 transition-all duration-200 
+                  shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105"
               >
                 Get Started
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </div>
           </div>
@@ -33,218 +39,118 @@ export function LandingPage() {
 
       {/* Hero Section */}
       <div className="relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
-          <h1 className="text-4xl tracking-tight font-extrabold text-white sm:text-5xl md:text-6xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-20 pb-16 text-center">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight font-extrabold text-white">
             <span className="block">Build Your Future</span>
-            <span className="block text-indigo-200">Brick by Brick</span>
+            <span className="block bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 to-indigo-400">
+              Brick by Brick
+            </span>
           </h1>
-          <p className="mt-3 max-w-md mx-auto text-base text-indigo-200 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
-            Join our community-driven platform where every referral builds your success. Start earning today with our innovative referral program.
+          <p className="mt-3 max-w-md mx-auto text-sm sm:text-base md:text-lg lg:text-xl text-indigo-200 md:mt-5 md:max-w-3xl">
+            Join our community-driven platform where every referral builds your success. 
+            Start earning today with our innovative referral program.
           </p>
-          <div className="mt-10 flex justify-center gap-x-6">
+          <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row justify-center gap-4 sm:gap-x-6">
             <Link
               to="/register"
-              className="inline-flex items-center px-8 py-4 border border-transparent text-base font-medium rounded-full text-indigo-600 bg-white hover:bg-indigo-50 md:py-4 md:text-lg md:px-10 transition-colors duration-200"
+              className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-4 border border-transparent 
+                text-base font-medium rounded-full text-white bg-gradient-to-r from-indigo-600 to-indigo-500 
+                hover:from-indigo-500 hover:to-indigo-600 shadow-lg shadow-indigo-500/25 
+                hover:shadow-indigo-500/40 transition-all duration-200 hover:scale-105"
             >
               Start Your Journey
               <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
             <a
               href="#how-it-works"
-              className="inline-flex items-center px-8 py-4 border border-transparent text-base font-medium rounded-full text-white bg-indigo-600 bg-opacity-20 hover:bg-opacity-30 md:py-4 md:text-lg md:px-10 transition-colors duration-200"
+              className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-4 border-2 border-white/20 
+                text-base font-medium rounded-full text-white hover:bg-white/10 
+                transition-all duration-200 hover:scale-105 hover:border-white/30"
             >
               Learn More
             </a>
+          </div>
+
+          {/* Stats */}
+          <div className="mt-16 sm:mt-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8 px-4">
+            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 sm:p-8">
+              <p className="text-3xl sm:text-4xl font-bold text-white">2,000+</p>
+              <p className="mt-2 text-indigo-200">Active Members</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 sm:p-8">
+              <p className="text-3xl sm:text-4xl font-bold text-white">UGX 90M+</p>
+              <p className="mt-2 text-indigo-200">Total Earnings</p>
+            </div>
+            <div className="hidden lg:block bg-white/10 backdrop-blur-lg rounded-2xl p-6 sm:p-8">
+              <p className="text-3xl sm:text-4xl font-bold text-white">24/7</p>
+              <p className="mt-2 text-indigo-200">Support Available</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Features Section */}
-      <div className="py-24 bg-white bg-opacity-5">
+      <div className="relative py-16 sm:py-24 bg-white/5 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
               Why Choose The Brick?
             </h2>
-            <p className="mt-4 text-xl text-indigo-200">
+            <p className="mt-4 text-lg sm:text-xl text-indigo-200">
               Build your financial future with our proven system
             </p>
           </div>
 
-          <div className="mt-20">
+          <div className="mt-12 sm:mt-20">
             <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="pt-6">
-                <div className="flow-root bg-white bg-opacity-10 rounded-lg px-6 pb-8">
-                  <div className="-mt-6">
-                    <div>
-                      <span className="inline-flex items-center justify-center p-3 bg-indigo-600 rounded-md shadow-lg">
-                        <Building2 className="h-6 w-6 text-white" />
-                      </span>
-                    </div>
-                    <h3 className="mt-8 text-lg font-medium text-white tracking-tight">Solid Foundation</h3>
-                    <p className="mt-5 text-base text-indigo-200">
-                      Built on trust and transparency, our platform provides a reliable way to grow your network and earnings.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6">
-                <div className="flow-root bg-white bg-opacity-10 rounded-lg px-6 pb-8">
-                  <div className="-mt-6">
-                    <div>
-                      <span className="inline-flex items-center justify-center p-3 bg-indigo-600 rounded-md shadow-lg">
-                        <Users className="h-6 w-6 text-white" />
-                      </span>
-                    </div>
-                    <h3 className="mt-8 text-lg font-medium text-white tracking-tight">Community Driven</h3>
-                    <p className="mt-5 text-base text-indigo-200">
-                      Join a thriving community of like-minded individuals all working towards financial growth.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6">
-                <div className="flow-root bg-white bg-opacity-10 rounded-lg px-6 pb-8">
-                  <div className="-mt-6">
-                    <div>
-                      <span className="inline-flex items-center justify-center p-3 bg-indigo-600 rounded-md shadow-lg">
-                        <TrendingUp className="h-6 w-6 text-white" />
-                      </span>
-                    </div>
-                    <h3 className="mt-8 text-lg font-medium text-white tracking-tight">Guaranteed Growth</h3>
-                    <p className="mt-5 text-base text-indigo-200">
-                      Our proven referral system ensures steady growth and reliable returns for active members.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* How It Works Section */}
-      <div id="how-it-works" className="py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-              How It Works
-            </h2>
-            <p className="mt-4 text-xl text-indigo-200">
-              Simple steps to start your journey with The Brick
-            </p>
-          </div>
-
-          <div className="mt-16">
-            <div className="space-y-10">
               {[
                 {
-                  id: 1,
-                  title: 'Register and Verify',
-                  description: 'Create your account and complete the verification process.',
+                  icon: Building2,
+                  title: 'Solid Foundation',
+                  description: 'Built on trust and transparency, our platform provides a reliable way to grow your network and earnings. Our proven system ensures steady growth and reliable returns for active members.'
                 },
                 {
-                  id: 2,
-                  title: 'Make Your Investment',
-                  description: 'Complete your registration with a one-time investment of 90,000 UGX.',
+                  icon: Users,
+                  title: 'Community Driven',
+                  description: 'Join a thriving community of entrepreneurs who support and inspire each other. Connect with like-minded individuals, share experiences, and grow together in your journey to financial success.'
                 },
                 {
-                  id: 3,
-                  title: 'Start Referring',
-                  description: 'Share your unique referral link and start building your network.',
-                },
-                {
-                  id: 4,
-                  title: 'Earn Rewards',
-                  description: 'Earn 10,000 UGX for each successful referral in your network.',
-                },
-              ].map((step) => (
-                <div key={step.id} className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="flex items-center justify-center h-12 w-12 rounded-md bg-indigo-600 text-white">
-                      {step.id}
+                  icon: Gift,
+                  title: 'Rewards & Bonuses',
+                  description: 'Earn additional rewards through our regular raffles and achievement bonuses. Every referral counts towards your success, with instant UGX 10,000 earnings per beneficiary in your network.'
+                }
+              ].map((feature, index) => (
+                <div key={index} className="relative group h-full">
+                  <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 opacity-25 group-hover:opacity-50 transition-opacity blur-lg" />
+                  <div className="relative h-full">
+                    <div className="flow-root bg-white/10 rounded-lg px-6 pb-8 backdrop-blur-xl h-full">
+                      <div className="-mt-6 flex flex-col h-full">
+                        <div className="flex-shrink-0">
+                          <span className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md shadow-lg group-hover:scale-110 transition-transform duration-200">
+                            <feature.icon className="h-6 w-6 text-white" />
+                          </span>
+                        </div>
+                        <h3 className="mt-8 text-lg font-medium text-white tracking-tight">{feature.title}</h3>
+                        <p className="mt-5 text-base text-indigo-200 flex-grow">
+                          {feature.description}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-medium text-white">{step.title}</h3>
-                    <p className="mt-2 text-base text-indigo-200">{step.description}</p>
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Benefits Section */}
-      <div className="py-24 bg-white bg-opacity-5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-              Member Benefits
-            </h2>
-            <p className="mt-4 text-xl text-indigo-200">
-              Enjoy exclusive benefits as a member of The Brick
-            </p>
-          </div>
-
-          <div className="mt-16">
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                'Earn from multiple referral levels',
-                'Weekly raffle entries',
-                'Community support and networking',
-                'Real-time earnings tracking',
-                'Secure payment processing',
-                'Dedicated support team',
-              ].map((benefit, index) => (
-                <div key={index} className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <CheckCircle2 className="h-6 w-6 text-indigo-400" />
-                  </div>
-                  <p className="ml-3 text-lg text-white">{benefit}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-              Ready to Start Building?
-            </h2>
-            <p className="mt-4 text-xl text-indigo-200">
-              Join thousands of successful members who are building their future with The Brick
-            </p>
-            <div className="mt-8 flex justify-center">
-              <Link
-                to="/register"
-                className="inline-flex items-center px-8 py-4 border border-transparent text-base font-medium rounded-full text-indigo-600 bg-white hover:bg-indigo-50 md:py-4 md:text-lg md:px-10 transition-colors duration-200"
-              >
-                Get Started Now
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
             </div>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="bg-white bg-opacity-5">
-        <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Box className="h-8 w-8 text-white" />
-              <span className="ml-2 text-xl font-bold text-white">The Brick Foundation</span>
-            </div>
-            <p className="text-base text-indigo-200">
-              © {new Date().getFullYear()} The Brick Foundation. All rights reserved.
+      <footer className="bg-white/5">
+        <div className="max-w-7xl mx-auto py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+            <Logo variant="light" className="transform hover:scale-105 transition-transform duration-200" />
+            <p className="text-sm sm:text-base text-indigo-200">
+              {new Date().getFullYear()} The Brick. All rights reserved.
             </p>
           </div>
         </div>

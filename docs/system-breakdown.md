@@ -1,5 +1,7 @@
 # The Brick Platform - System Breakdown
 
+86f9af653b50718d331c248ced3f6f70
+
 ## 1. System Architecture
 
 ### 1.1 Technology Stack

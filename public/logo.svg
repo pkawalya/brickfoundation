@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background brick shape -->
+  <rect x="4" y="8" width="32" height="24" rx="2" fill="#4F46E5"/>
+  <rect x="8" y="16" width="24" height="8" fill="white" fillOpacity="0.3"/>
+  
+  <!-- Text "THE BRICK" -->
+  <text x="44" y="26" font-family="Arial" font-weight="bold" font-size="18" fill="currentColor">
+    THE BRICK
+  </text>
+</svg>

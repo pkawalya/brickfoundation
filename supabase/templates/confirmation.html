@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        :root {
+            --primary-color: #4F46E5;
+            --text-color: #1F2937;
+            --background-color: #F9FAFB;
+            --border-color: #E5E7EB;
+        }
+        
+        .container {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            color: var(--text-color);
+        }
+        
+        .logo {
+            width: 200px;
+            margin-bottom: 24px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: var(--primary-color);
+            color: white !important;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 16px 0;
+            font-weight: 500;
+        }
+        
+        .footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 14px;
+            color: #6B7280;
+        }
+        
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .url-display {
+            background-color: var(--background-color);
+            padding: 12px;
+            border-radius: 4px;
+            word-break: break-all;
+            font-family: monospace;
+            margin: 16px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://brickfoundations.com/logo.png" alt="The Brick Foundation" class="logo">
+        </div>
+        
+        <h2>Welcome to The Brick Foundation</h2>
+        <p>Hello,</p>
+        <p>Thank you for signing up! Please confirm your email address by clicking the button below:</p>
+        
+        <p style="text-align: center;">
+            <a href="{{ .ConfirmationURL }}" class="button">Verify Email</a>
+        </p>
+        
+        <p>Or copy and paste this URL into your browser:</p>
+        <div class="url-display">
+            {{ .ConfirmationURL }}
+        </div>
+        
+        <div class="footer">
+            <p>
+                Thanks,<br>
+                The Brick Foundation Team
+            </p>
+            <p>
+                <a href="https://brickfoundations.com">https://brickfoundations.com</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
