@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../config/supabaseClient';
 
 interface User {
   id: string;
@@ -18,6 +18,7 @@ interface AuthState {
   loading: boolean;
   verificationEmail: string | null;
   setUser: (user: User | null) => void;
+  setLoading: (loading: boolean) => void;
   setVerificationEmail: (email: string | null) => void;
   signUp: (email: string, password: string, full_name: string, phone_number: string) => Promise<void>;
   verifyOTP: (email: string, token: string) => Promise<void>;
@@ -27,6 +28,7 @@ interface AuthState {
   resendVerificationEmail: (email: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  initializeSession: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -34,7 +36,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   verificationEmail: null,
   setUser: (user) => set({ user }),
+  setLoading: (loading) => set({ loading }),
   setVerificationEmail: (email) => set({ verificationEmail: email }),
+
+  initializeSession: async () => {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      if (session?.user) {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (userError) throw userError;
+        set({ user: userData as User });
+      }
+    } catch (error) {
+      console.error('Error initializing session:', error);
+    } finally {
+      set({ loading: false });
+    }
+  },
+
   signUp: async (email, password, full_name, phone_number) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -98,6 +124,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   signIn: async (email, password) => {
     try {
+      set({ loading: true });
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -134,15 +161,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         throw error;
       }
       throw new Error('Invalid login credentials');
+    } finally {
+      set({ loading: false });
     }
   },
   signOut: async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    set({ user: null });
+    try {
+      set({ loading: true });
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      set({ user: null });
+    } catch (error) {
+      console.error('Error signing out:', error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
   },
   isAdmin: () => {
-    const user = get().user;
+    const { user } = get();
     return user?.role === 'admin';
   },
   resendVerificationEmail: async (email) => {

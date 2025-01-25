@@ -1,9 +1,8 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { createContext, useContext, useEffect } from 'react';
+import { useAuthStore } from '../store/auth';
 
 interface AuthContextType {
-  user: User | null;
+  user: any;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -11,34 +10,20 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, signOut, initializeSession } = useAuthStore();
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for changes on auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    console.log('AuthProvider: Initializing session');
+    initializeSession();
   }, []);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
 
   const value = {
     user,
     loading,
     signOut
   };
+
+  console.log('AuthProvider: Current state', { user, loading });
 
   return (
     <AuthContext.Provider value={value}>

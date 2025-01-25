@@ -1,18 +1,88 @@
-import React from 'react';
-import { Users, Gift, DollarSign } from 'lucide-react';
-import { DashboardLayout } from './DashboardLayout';
+import React, { useEffect, useState, ErrorBoundary } from 'react';
+import {
+  Users,
+  UserPlus,
+  DollarSign,
+  TrendingUp,
+  Award,
+  Star,
+} from 'lucide-react';
+import { useAuthStore } from '../../store/auth';
+import { ReferralTree } from './ReferralTree';
+import { ReferralTiers } from './ReferralTiers';
+import { ReferralShare } from './ReferralShare';
+import { ReferralRewards } from './ReferralRewards';
+import { ReferralLeaderboard } from './ReferralLeaderboard';
+import { ReferralInsights } from './ReferralInsights';
+import { ReferralService } from '../../lib/referralService';
 
 export function UserDashboard() {
+  const { user } = useAuthStore();
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    pending: 0,
+    inactive: 0,
+    totalRewards: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    console.log('UserDashboard: Component mounted');
+    fetchStats();
+  }, [user]);
+
+  const fetchStats = async () => {
+    try {
+      console.log('UserDashboard: Fetching stats...');
+      const statsData = await ReferralService.getReferralStats();
+      console.log('UserDashboard: Stats data:', statsData);
+      setStats(statsData);
+    } catch (error) {
+      console.error('UserDashboard: Error fetching stats:', error);
+      setStats({
+        total: 0,
+        active: 0,
+        pending: 0,
+        inactive: 0,
+        totalRewards: 0
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user) {
+    console.log('UserDashboard: No user found');
+    return null;
+  }
+
+  if (loading) {
+    console.log('UserDashboard: Loading stats...');
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
+  console.log('UserDashboard: Rendering with stats:', stats);
+
   return (
-    <DashboardLayout>
-      <div className="py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-          <h1 className="text-2xl font-semibold text-gray-900">My Dashboard</h1>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-          {/* Stats Grid */}
-          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+    <ErrorBoundary>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-8">
+          {/* Welcome Section */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.email}</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage your referrals and track your rewards
+            </p>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -20,38 +90,56 @@ export function UserDashboard() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">My Referrals</dt>
-                      <dd className="text-lg font-medium text-gray-900">3</dd>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Total Referrals</dt>
+                      <dd className="text-lg font-semibold text-gray-900">{stats.total}</dd>
                     </dl>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+
+            <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <DollarSign className="h-6 w-6 text-gray-400" />
+                    <UserPlus className="h-6 w-6 text-green-400" />
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Active Referrals</dt>
+                      <dd className="text-lg font-semibold text-gray-900">{stats.active}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <DollarSign className="h-6 w-6 text-indigo-400" />
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Total Earnings</dt>
-                      <dd className="text-lg font-medium text-gray-900">$30</dd>
+                      <dd className="text-lg font-semibold text-gray-900">${stats.totalRewards.toFixed(2)}</dd>
                     </dl>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+
+            <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <Gift className="h-6 w-6 text-gray-400" />
+                    <TrendingUp className="h-6 w-6 text-yellow-400" />
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Raffle Entries</dt>
-                      <dd className="text-lg font-medium text-gray-900">2</dd>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Pending Referrals</dt>
+                      <dd className="text-lg font-semibold text-gray-900">{stats.pending}</dd>
                     </dl>
                   </div>
                 </div>
@@ -59,92 +147,34 @@ export function UserDashboard() {
             </div>
           </div>
 
-          {/* Referral Tree */}
-          <div className="mt-8">
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  My Referral Tree
-                </h3>
-              </div>
-              <div className="px-4 py-5 sm:p-6">
-                <div className="flex justify-center">
-                  {/* Placeholder for referral tree visualization */}
-                  <div className="text-center text-gray-500">
-                    <Users className="mx-auto h-12 w-12" />
-                    <p className="mt-2">Your referral tree will appear here</p>
-                  </div>
-                </div>
-              </div>
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Share Section */}
+              <ReferralShare />
+              
+              {/* Insights Section */}
+              <ReferralInsights />
+              
+              {/* Referral Tree */}
+              <ReferralTree />
             </div>
-          </div>
 
-          {/* Recent Earnings */}
-          <div className="mt-8">
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  Recent Earnings
-                </h3>
-              </div>
-              <div className="px-4 py-5 sm:p-6">
-                <div className="flow-root">
-                  <ul role="list" className="-mb-8">
-                    {[
-                      {
-                        type: 'Referral Bonus',
-                        amount: '$10',
-                        date: '2 days ago'
-                      },
-                      {
-                        type: 'Referral Bonus',
-                        amount: '$10',
-                        date: '5 days ago'
-                      },
-                      {
-                        type: 'Referral Bonus',
-                        amount: '$10',
-                        date: '1 week ago'
-                      }
-                    ].map((earning, idx) => (
-                      <li key={idx}>
-                        <div className="relative pb-8">
-                          {idx !== 2 ? (
-                            <span
-                              className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200"
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          <div className="relative flex space-x-3">
-                            <div>
-                              <span className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center ring-8 ring-white">
-                                <DollarSign className="h-4 w-4 text-white" />
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
-                              <div>
-                                <p className="text-sm text-gray-500">
-                                  {earning.type}
-                                  <span className="font-medium text-gray-900 ml-2">
-                                    {earning.amount}
-                                  </span>
-                                </p>
-                              </div>
-                              <div className="text-right text-sm whitespace-nowrap text-gray-500">
-                                <time>{earning.date}</time>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+            {/* Right Column */}
+            <div className="space-y-8">
+              {/* Tiers Section */}
+              <ReferralTiers />
+              
+              {/* Leaderboard Section */}
+              <ReferralLeaderboard />
+              
+              {/* Rewards Section */}
+              <ReferralRewards />
             </div>
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </ErrorBoundary>
   );
 }

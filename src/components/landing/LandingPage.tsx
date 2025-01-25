@@ -144,6 +144,101 @@ export function LandingPage() {
         </div>
       </div>
 
+      {/* How It Works Section */}
+      <div className="relative py-16 sm:py-24 bg-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+              How It Works
+            </h2>
+            <p className="mt-4 text-lg sm:text-xl text-indigo-200">
+              Your journey to success in four simple steps
+            </p>
+          </div>
+
+          <div className="mt-12 sm:mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[
+              {
+                step: '01',
+                title: 'Sign Up',
+                description: 'Create your free account and complete your profile verification'
+              },
+              {
+                step: '02',
+                title: 'Build Network',
+                description: 'Invite friends and grow your network through our referral system'
+              },
+              {
+                step: '03',
+                title: 'Earn Rewards',
+                description: 'Get instant earnings for every successful referral in your network'
+              },
+              {
+                step: '04',
+                title: 'Grow Together',
+                description: 'Participate in community activities and unlock additional bonuses'
+              }
+            ].map((step, index) => (
+              <div key={index} className="relative group">
+                <div className="flex flex-col items-center p-6 bg-white/10 backdrop-blur-xl rounded-lg hover:bg-white/15 transition-colors duration-200">
+                  <span className="text-3xl font-bold text-indigo-400">{step.step}</span>
+                  <h3 className="mt-4 text-lg font-semibold text-white">{step.title}</h3>
+                  <p className="mt-2 text-center text-indigo-200">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Testimonials Section */}
+      <div className="relative py-16 sm:py-24 bg-white/5 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+              What Our Members Say
+            </h2>
+            <p className="mt-4 text-lg sm:text-xl text-indigo-200">
+              Real stories from our community members
+            </p>
+          </div>
+
+          <div className="mt-12 sm:mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                name: 'Sarah K.',
+                role: 'Community Member',
+                content: 'The Brick has transformed my approach to network building. The support from the community is incredible, and the earnings are consistent.'
+              },
+              {
+                name: 'David M.',
+                role: 'Senior Member',
+                content: 'What stands out is the transparency and reliability. Every referral is tracked accurately, and payments are always on time.'
+              },
+              {
+                name: 'Lisa T.',
+                role: 'Network Leader',
+                content: 'Started as a skeptic, now I\'m a believer. The platform\'s systematic approach to growth has helped me build a sustainable income stream.'
+              }
+            ].map((testimonial, index) => (
+              <div key={index} className="relative">
+                <div className="h-full p-6 bg-white/10 backdrop-blur-xl rounded-lg border border-white/10 hover:border-indigo-500/50 transition-colors duration-200">
+                  <div className="flex flex-col h-full">
+                    <div className="flex-grow">
+                      <p className="text-white/90 italic">"{testimonial.content}"</p>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <p className="text-white font-medium">{testimonial.name}</p>
+                      <p className="text-indigo-200 text-sm">{testimonial.role}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Footer */}
       <footer className="bg-white/5">
         <div className="max-w-7xl mx-auto py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
