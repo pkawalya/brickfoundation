@@ -379,34 +379,53 @@ export const ReferralService = {
   // Get referral stats
   async getReferralStats() {
     try {
+      console.log('ReferralService: Getting referral stats...');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      
+      if (!user) {
+        console.error('ReferralService: No authenticated user found');
+        throw new Error('User not authenticated');
+      }
 
-      const { data, error } = await supabase
+      console.log('ReferralService: Fetching referrals for user:', user.id);
+      const { data: referrals, error: referralsError } = await supabase
         .from('referrals')
-        .select('status, total_rewards')
+        .select(`
+          id,
+          status,
+          total_rewards,
+          rewards (
+            amount,
+            status
+          )
+        `)
         .eq('referrer_id', user.id);
 
-      if (error) throw error;
+      if (referralsError) {
+        console.error('ReferralService: Error fetching referrals:', referralsError);
+        throw referralsError;
+      }
+
+      console.log('ReferralService: Raw referrals data:', referrals);
 
       const stats = {
-        total: data.length,
-        active: data.filter(r => r.status === 'active').length,
-        pending: data.filter(r => r.status === 'pending').length,
-        inactive: data.filter(r => r.status === 'inactive').length,
-        totalRewards: data.reduce((sum, r) => sum + (r.total_rewards || 0), 0)
+        total: referrals?.length || 0,
+        active: referrals?.filter(r => r.status === 'active').length || 0,
+        pending: referrals?.filter(r => r.status === 'pending').length || 0,
+        inactive: referrals?.filter(r => r.status === 'inactive').length || 0,
+        totalRewards: referrals?.reduce((sum, r) => {
+          // Sum up approved rewards
+          const approvedRewards = r.rewards?.reduce((rewardSum, reward) => 
+            reward.status === 'approved' ? rewardSum + reward.amount : rewardSum, 0) || 0;
+          return sum + approvedRewards;
+        }, 0) || 0
       };
 
+      console.log('ReferralService: Calculated stats:', stats);
       return stats;
     } catch (error) {
-      console.error('Error fetching referral stats:', error);
-      return {
-        total: 0,
-        active: 0,
-        pending: 0,
-        inactive: 0,
-        totalRewards: 0
-      };
+      console.error('ReferralService: Error in getReferralStats:', error);
+      throw error; // Let the component handle the error
     }
   },
 

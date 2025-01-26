@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { LandingPage } from './components/landing/LandingPage';
 import { Register } from './components/auth/Register';
@@ -8,7 +8,6 @@ import { UserDashboard } from './components/dashboard/UserDashboard';
 import { ReferralsPage } from './components/dashboard/ReferralsPage';
 import { PasswordResetRequest } from './components/auth/PasswordResetRequest';
 import { PasswordReset } from './components/auth/PasswordReset';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useAuthStore } from './store/auth';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 
@@ -18,8 +17,10 @@ interface PrivateRouteProps {
 }
 
 function PrivateRoute({ children, requireAdmin = false }: PrivateRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuthStore();
   const isAdmin = user?.role === 'admin';
+
+  console.log('PrivateRoute:', { user, loading, isAdmin, requireAdmin }); // Debug log
 
   if (loading) {
     return (
@@ -30,10 +31,12 @@ function PrivateRoute({ children, requireAdmin = false }: PrivateRouteProps) {
   }
 
   if (!user) {
+    console.log('PrivateRoute: No user, redirecting to login'); // Debug log
     return <Navigate to="/login" />;
   }
 
   if (requireAdmin && !isAdmin) {
+    console.log('PrivateRoute: Not admin, redirecting to dashboard'); // Debug log
     return <Navigate to="/dashboard" />;
   }
 
@@ -41,78 +44,91 @@ function PrivateRoute({ children, requireAdmin = false }: PrivateRouteProps) {
 }
 
 function App() {
+  const { initializeSession, loading } = useAuthStore();
+
+  useEffect(() => {
+    console.log('App: Initializing session...'); // Debug log
+    initializeSession();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot-password" element={<PasswordResetRequest />} />
-          <Route path="/reset-password" element={<PasswordReset />} />
+    <Router>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<PasswordResetRequest />} />
+        <Route path="/reset-password" element={<PasswordReset />} />
 
-          {/* Protected routes - all wrapped in DashboardLayout */}
-          <Route path="/dashboard">
-            <Route
-              index
-              element={
-                <PrivateRoute>
-                  <UserDashboard />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="referrals"
-              element={
-                <PrivateRoute>
-                  <ReferralsPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="earnings"
-              element={
-                <PrivateRoute>
-                  <div className="p-4">Earnings Page Coming Soon</div>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="raffles"
-              element={
-                <PrivateRoute>
-                  <div className="p-4">Raffles Page Coming Soon</div>
-                </PrivateRoute>
-              }
-            />
-          </Route>
+        {/* Protected routes */}
+        <Route path="/dashboard">
+          <Route
+            index
+            element={
+              <PrivateRoute>
+                <UserDashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="referrals"
+            element={
+              <PrivateRoute>
+                <ReferralsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="earnings"
+            element={
+              <PrivateRoute>
+                <div className="p-4">Earnings Page Coming Soon</div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="raffles"
+            element={
+              <PrivateRoute>
+                <div className="p-4">Raffles Page Coming Soon</div>
+              </PrivateRoute>
+            }
+          />
+        </Route>
 
-          {/* Admin routes */}
-          <Route path="/admin">
-            <Route
-              index
-              element={
-                <PrivateRoute requireAdmin={true}>
-                  <AdminDashboard />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="users"
-              element={
-                <PrivateRoute requireAdmin={true}>
-                  <div className="p-4">User Management Coming Soon</div>
-                </PrivateRoute>
-              }
-            />
-          </Route>
+        {/* Admin routes */}
+        <Route path="/admin">
+          <Route
+            index
+            element={
+              <PrivateRoute requireAdmin={true}>
+                <AdminDashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <PrivateRoute requireAdmin={true}>
+                <div className="p-4">User Management Coming Soon</div>
+              </PrivateRoute>
+            }
+          />
+        </Route>
 
-          {/* Catch all route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+        {/* Catch all route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
 

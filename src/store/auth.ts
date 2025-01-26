@@ -6,7 +6,7 @@ interface User {
   email: string;
   full_name: string;
   phone_number: string;
-  is_active: boolean;
+  status: 'pending' | 'active' | 'suspended';
   role: 'admin' | 'user';
   avatar_url?: string;
   bio?: string;
@@ -41,57 +41,110 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initializeSession: async () => {
     try {
+      console.log('AuthStore: Initializing session...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
+      
+      if (sessionError) {
+        console.error('AuthStore: Session error:', sessionError);
+        throw sessionError;
+      }
+
+      console.log('AuthStore: Session data:', session);
 
       if (session?.user) {
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('*')
+          .select('id, email, full_name, phone_number, status, role, avatar_url, bio, last_login')
           .eq('id', session.user.id)
           .single();
 
-        if (userError) throw userError;
+        if (userError) {
+          console.error('AuthStore: User data error:', userError);
+          throw userError;
+        }
+
+        console.log('AuthStore: User data:', userData);
         set({ user: userData as User });
+      } else {
+        console.log('AuthStore: No session found');
+        set({ user: null });
       }
     } catch (error) {
-      console.error('Error initializing session:', error);
+      console.error('AuthStore: Error initializing session:', error);
+      set({ user: null });
     } finally {
+      console.log('AuthStore: Setting loading to false');
       set({ loading: false });
     }
   },
 
   signUp: async (email, password, full_name, phone_number) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name,
-          phone_number,
+    try {
+      console.log('AuthStore: Attempting sign up...'); 
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name,
+            phone_number,
+          },
+          emailRedirectTo: `${window.location.origin}/verify`,
         },
-        emailRedirectTo: `${window.location.origin}/verify`,
-      },
-    });
-    
-    if (error) throw error;
-    
-    if (data.user) {
-      const { error: userError } = await supabase
+      });
+      
+      if (error) {
+        console.error('AuthStore: Sign up error:', error); 
+        throw error;
+      }
+      
+      if (!data.user) {
+        console.error('AuthStore: No user data returned from sign up'); 
+        throw new Error('Sign up failed');
+      }
+
+      // Check if user already exists in users table
+      const { data: existingUser, error: checkError } = await supabase
         .from('users')
-        .insert([
-          {
+        .select('id')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('AuthStore: Error checking existing user:', checkError); 
+        throw checkError;
+      }
+
+      if (!existingUser) {
+        // Insert user data into users table
+        const { error: createError } = await supabase
+          .from('users')
+          .insert([{
             id: data.user.id,
             email,
             full_name,
             phone_number,
-            is_active: false,
+            status: 'pending',
             role: 'user',
-          },
-        ]);
-      
-      if (userError) throw userError;
+          }]);
+        
+        if (createError) {
+          console.error('AuthStore: Error creating user record:', createError); 
+          throw createError;
+        }
+      }
+
+      console.log('AuthStore: Sign up successful, setting verification email'); 
       set({ verificationEmail: email });
+    } catch (error) {
+      console.error('AuthStore: Sign up failed:', error); 
+      if (error instanceof Error) {
+        throw error;
+      } else if (typeof error === 'object' && error !== null) {
+        throw new Error(error.message || 'Sign up failed');
+      } else {
+        throw new Error('Sign up failed');
+      }
     }
   },
   verifyOTP: async (email, token) => {
@@ -106,7 +159,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (data.user) {
       const { error: updateError } = await supabase
         .from('users')
-        .update({ is_active: true })
+        .update({ status: 'active' })
         .eq('id', data.user.id);
       
       if (updateError) throw updateError;
@@ -124,43 +177,89 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   signIn: async (email, password) => {
     try {
-      set({ loading: true });
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      console.log('AuthStore: Attempting sign in...'); 
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      
-      if (authError) throw authError;
-      
-      if (authData.user) {
-        // Fetch user data including role
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-        
-        if (userError) throw userError;
-        
-        if (!userData.is_active) {
-          set({ verificationEmail: email });
-          throw new Error('Please verify your email address to continue');
-        }
-        
-        // Update last login
-        await supabase
-          .from('users')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', authData.user.id);
-        
-        // Set user with role from database
-        set({ user: { ...userData, role: userData.role } as User });
-      }
-    } catch (error) {
-      if (error instanceof Error) {
+
+      if (error) {
+        console.error('AuthStore: Sign in error:', error); 
         throw error;
       }
-      throw new Error('Invalid login credentials');
+
+      if (!data.user) {
+        console.error('AuthStore: No user data returned'); 
+        throw new Error('No user data returned');
+      }
+
+      // Check if email is verified
+      if (!data.user.email_confirmed_at) {
+        console.error('AuthStore: Email not confirmed'); 
+        throw new Error('Email not confirmed');
+      }
+
+      // Fetch user data from users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, email, full_name, phone_number, status, role, avatar_url, bio, last_login')
+        .eq('id', data.user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (userError) {
+        console.error('AuthStore: Error fetching user data:', userError); 
+        throw userError;
+      }
+
+      if (!userData) {
+        console.error('AuthStore: No user record found, creating one...'); 
+        // Create user record if it doesn't exist
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert([{
+            id: data.user.id,
+            email: data.user.email,
+            full_name: data.user.user_metadata?.full_name || '',
+            phone_number: data.user.user_metadata?.phone_number || '',
+            status: 'active',
+            role: 'user',
+            last_login: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('AuthStore: Error creating user record:', createError); 
+          throw createError;
+        }
+
+        console.log('AuthStore: User record created:', newUser); 
+        set({ user: newUser });
+        return;
+      }
+
+      // Update last login
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', userData.id);
+
+      if (updateError) {
+        console.error('AuthStore: Error updating last login:', updateError); 
+      }
+
+      console.log('AuthStore: Sign in successful, setting user:', userData); 
+      set({ user: userData });
+    } catch (error) {
+      console.error('AuthStore: Sign in failed:', error); 
+      if (error instanceof Error) {
+        throw error;
+      } else if (typeof error === 'object' && error !== null) {
+        throw new Error(error.message || 'Authentication failed');
+      } else {
+        throw new Error('Authentication failed');
+      }
     } finally {
       set({ loading: false });
     }

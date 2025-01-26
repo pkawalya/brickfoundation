@@ -38,45 +38,42 @@ export function AdminDashboard() {
     try {
       setLoading(true);
       
-      // Fetch user stats
-      const { data: users } = await supabase
+      // Fetch user stats - only get what we know exists
+      const { data: users, error: usersError } = await supabase
         .from('users')
-        .select('id, is_active, registration_paid');
+        .select('id, status, created_at, email, full_name');
 
-      const { data: referrals } = await supabase
-        .from('referral_chain')
-        .select('id');
-
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('amount');
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        return;
+      }
 
       // Calculate stats
       setStats({
         totalUsers: users?.length || 0,
-        activeReferrals: referrals?.length || 0,
-        totalRevenue: payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0,
-        pendingVerifications: users?.filter(u => !u.is_active).length || 0,
+        activeReferrals: 0, // We'll implement this later
+        totalRevenue: 0, // We'll implement this later
+        pendingVerifications: users?.filter(u => u.status === 'pending').length || 0,
       });
 
-      // Fetch recent activities
-      const { data: recentActivities } = await supabase
-        .from('users')
-        .select('id, email, full_name, created_at')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (recentActivities) {
-        setActivities(recentActivities.map(user => ({
-          id: user.id,
-          event: 'New user registration',
-          time: new Date(user.created_at).toLocaleString(),
-          details: `${user.full_name} (${user.email})`,
-          type: 'registration'
-        })));
+      // Set recent activities from users table
+      if (users) {
+        const recentActivities = users
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 10)
+          .map(user => ({
+            id: user.id,
+            event: 'New user registration',
+            time: new Date(user.created_at).toLocaleString(),
+            details: `${user.full_name || 'Unknown'} (${user.email})`,
+            type: 'registration' as const
+          }));
+        
+        setActivities(recentActivities);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      // Don't throw the error, just log it
     } finally {
       setLoading(false);
     }

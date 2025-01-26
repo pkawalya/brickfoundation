@@ -1,5 +1,5 @@
 -- Create users table with email verification
-create table public.users (
+create table if not exists public.users (
   id uuid references auth.users on delete cascade not null primary key,
   email text unique not null,
   phone text unique not null,
@@ -64,3 +64,32 @@ begin
   return code;
 end;
 $$ language plpgsql security definer;
+
+-- Start transaction
+BEGIN;
+
+-- Create password reset attempts table
+CREATE TABLE IF NOT EXISTS auth.password_reset_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id),
+    attempted_at TIMESTAMPTZ DEFAULT NOW(),
+    ip_address INET,
+    success BOOLEAN DEFAULT false
+);
+
+-- Create function to cleanup old attempts
+CREATE OR REPLACE FUNCTION auth.cleanup_password_reset_attempts()
+RETURNS void AS $$
+BEGIN
+    -- Delete attempts older than 24 hours
+    DELETE FROM auth.password_reset_attempts 
+    WHERE attempted_at < NOW() - INTERVAL '24 hours';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS password_reset_attempts_user_id_idx ON auth.password_reset_attempts(user_id);
+CREATE INDEX IF NOT EXISTS password_reset_attempts_ip_address_idx ON auth.password_reset_attempts(ip_address);
+CREATE INDEX IF NOT EXISTS password_reset_attempts_attempted_at_idx ON auth.password_reset_attempts(attempted_at);
+
+COMMIT;

@@ -5,7 +5,7 @@ import { validatePassword, getPasswordStrengthColor, getPasswordFeedback } from 
 interface PasswordInputProps {
   id: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   label: string;
   showStrengthMeter?: boolean;
   autoComplete?: string;
@@ -44,7 +44,7 @@ export function PasswordInput({
           type={showPassword ? 'text' : 'password'}
           id={id}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={onChange}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           autoComplete={autoComplete}

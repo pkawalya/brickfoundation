@@ -54,22 +54,49 @@ export function validatePassword(password: string): PasswordValidation {
 
 export function getPasswordStrengthColor(strength: 'weak' | 'medium' | 'strong'): string {
   switch (strength) {
-    case 'strong':
-      return 'bg-green-500';
-    case 'medium':
-      return 'bg-yellow-500';
     case 'weak':
       return 'bg-red-500';
+    case 'medium':
+      return 'bg-yellow-500';
+    case 'strong':
+      return 'bg-green-500';
+    default:
+      return 'bg-gray-200';
   }
 }
 
 export function getPasswordFeedback(strength: 'weak' | 'medium' | 'strong'): string {
   switch (strength) {
-    case 'strong':
-      return 'Great! This is a strong password.';
-    case 'medium':
-      return 'Good, but could be stronger. Try adding more special characters or numbers.';
     case 'weak':
-      return 'This password is weak. Please make it more complex.';
+      return 'Password is too weak. Add more characters and mix uppercase, lowercase, numbers, and symbols.';
+    case 'medium':
+      return 'Password is moderate. Add more variety for better security.';
+    case 'strong':
+      return 'Password is strong!';
+    default:
+      return '';
   }
+}
+
+export function validatePasswordSimple(password: string): { strength: 'weak' | 'medium' | 'strong' } {
+  if (!password) {
+    return { strength: 'weak' };
+  }
+
+  let score = 0;
+
+  // Length check
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+
+  // Character type checks
+  if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  // Determine strength based on score
+  if (score <= 2) return { strength: 'weak' };
+  if (score <= 4) return { strength: 'medium' };
+  return { strength: 'strong' };
 }

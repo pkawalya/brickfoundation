@@ -92,15 +92,13 @@ export function Register() {
       // Navigate to login page with success message
       navigate('/login?registered=true');
     } catch (error: any) {
-      console.error('Registration error:', error); // Debug log
-
-      // Handle specific error cases
-      if (error.message?.toLowerCase().includes('email')) {
-        setError('This email address is already registered');
-      } else if (error.message?.toLowerCase().includes('password')) {
-        setError('Password is too weak. Please choose a stronger password');
+      console.error('Registration error:', error);
+      const errorMessage = error?.message || error?.error_description || 'An error occurred during registration';
+      
+      if (errorMessage.includes('already registered')) {
+        setError('This email is already registered. Please sign in or use a different email.');
       } else {
-        setError('Registration failed. Please try again later');
+        setError(errorMessage);
       }
     } finally {
       setIsLoading(false);
