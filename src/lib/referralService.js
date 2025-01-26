@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import crypto from 'crypto';
 
 export const ReferralService = {
   // Generate referral link with UTM parameters
@@ -68,6 +69,60 @@ export const ReferralService = {
     } catch (error) {
       console.error('Error sharing:', error);
       return false;
+    }
+  },
+
+  // Share referral link via different platforms
+  shareReferralLinkVia: {
+    // Copy link to clipboard
+    async copyToClipboard(link) {
+      try {
+        await navigator.clipboard.writeText(link);
+        return { success: true, message: 'Link copied to clipboard!' };
+      } catch (error) {
+        console.error('Failed to copy link:', error);
+        return { success: false, message: 'Failed to copy link. Please try selecting and copying manually.' };
+      }
+    },
+
+    // Share via WhatsApp
+    whatsApp(link) {
+      const text = `Join me on Brick Foundation! Use my referral link: ${link}`;
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(whatsappUrl, '_blank');
+      return { success: true, message: 'Opening WhatsApp...' };
+    },
+
+    // Share via Email
+    email(link) {
+      const subject = 'Join me on Brick Foundation';
+      const body = `Hey! I thought you might be interested in joining Brick Foundation. Use my referral link: ${link}`;
+      const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoUrl;
+      return { success: true, message: 'Opening email client...' };
+    },
+
+    // Share via Twitter/X
+    twitter(link) {
+      const text = `Join me on Brick Foundation! Use my referral link: ${link}`;
+      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+      window.open(twitterUrl, '_blank');
+      return { success: true, message: 'Opening Twitter...' };
+    },
+
+    // Share via Facebook
+    facebook(link) {
+      const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`;
+      window.open(facebookUrl, '_blank');
+      return { success: true, message: 'Opening Facebook...' };
+    },
+
+    // Share via Telegram
+    telegram(link) {
+      const text = `Join me on Brick Foundation! Use my referral link: ${link}`;
+      const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+      window.open(telegramUrl, '_blank');
+      return { success: true, message: 'Opening Telegram...' };
     }
   },
 
@@ -376,56 +431,139 @@ export const ReferralService = {
     }
   },
 
-  // Get referral stats
-  async getReferralStats() {
+  // Get referral stats for a user
+  async getReferralStats(userId) {
     try {
-      console.log('ReferralService: Getting referral stats...');
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        console.error('ReferralService: No authenticated user found');
-        throw new Error('User not authenticated');
+      if (!userId) {
+        console.error('No userId provided to getReferralStats');
+        return {
+          total: 0,
+          active: 0,
+          pending: 0,
+          inactive: 0,
+          totalRewards: 0,
+          referrals: []
+        };
       }
 
-      console.log('ReferralService: Fetching referrals for user:', user.id);
+      console.log('Fetching referral stats for user:', userId);
+
+      // First get all referrals for the user
       const { data: referrals, error: referralsError } = await supabase
         .from('referrals')
-        .select(`
-          id,
-          status,
-          total_rewards,
-          rewards (
-            amount,
-            status
-          )
-        `)
-        .eq('referrer_id', user.id);
+        .select('id, status, total_rewards, metadata, referred_id')
+        .eq('referrer_id', userId);
 
       if (referralsError) {
-        console.error('ReferralService: Error fetching referrals:', referralsError);
+        console.error('Error fetching referrals:', referralsError);
         throw referralsError;
       }
 
-      console.log('ReferralService: Raw referrals data:', referrals);
+      if (!referrals) {
+        return {
+          total: 0,
+          active: 0,
+          pending: 0,
+          inactive: 0,
+          totalRewards: 0,
+          referrals: []
+        };
+      }
 
+      // For each referral with a referred_id, fetch the user details
+      const referralsWithUsers = await Promise.all(
+        referrals.map(async (referral) => {
+          if (referral.referred_id) {
+            try {
+              const { data: userData, error: userError } = await supabase
+                .from('auth.users')
+                .select('id, email, created_at')
+                .eq('id', referral.referred_id)
+                .single();
+
+              if (userError) {
+                console.error('Error fetching user:', userError);
+                return {
+                  ...referral,
+                  referredUser: null
+                };
+              }
+
+              return {
+                ...referral,
+                referredUser: userData
+              };
+            } catch (error) {
+              console.error('Error processing referral:', error);
+              return {
+                ...referral,
+                referredUser: null
+              };
+            }
+          }
+          return {
+            ...referral,
+            referredUser: null
+          };
+        })
+      );
+
+      // Calculate stats
       const stats = {
-        total: referrals?.length || 0,
-        active: referrals?.filter(r => r.status === 'active').length || 0,
-        pending: referrals?.filter(r => r.status === 'pending').length || 0,
-        inactive: referrals?.filter(r => r.status === 'inactive').length || 0,
-        totalRewards: referrals?.reduce((sum, r) => {
-          // Sum up approved rewards
-          const approvedRewards = r.rewards?.reduce((rewardSum, reward) => 
-            reward.status === 'approved' ? rewardSum + reward.amount : rewardSum, 0) || 0;
-          return sum + approvedRewards;
-        }, 0) || 0
+        total: referrals.length,
+        active: referrals.filter(r => r.status === 'active').length,
+        pending: referrals.filter(r => r.status === 'pending').length,
+        inactive: referrals.filter(r => r.status === 'inactive').length,
+        totalRewards: referrals.reduce((sum, r) => sum + (parseFloat(r.total_rewards) || 0), 0),
+        referrals: referralsWithUsers.map(r => ({
+          id: r.id,
+          status: r.status,
+          rewards: parseFloat(r.total_rewards) || 0,
+          referredUser: r.referredUser,
+          metadata: r.metadata
+        }))
       };
 
-      console.log('ReferralService: Calculated stats:', stats);
+      console.log('Referral stats:', stats);
       return stats;
     } catch (error) {
-      console.error('ReferralService: Error in getReferralStats:', error);
-      throw error; // Let the component handle the error
+      console.error('Error in getReferralStats:', error);
+      // Return empty stats instead of throwing
+      return {
+        total: 0,
+        active: 0,
+        pending: 0,
+        inactive: 0,
+        totalRewards: 0,
+        referrals: []
+      };
+    }
+  },
+
+  // Get all active referrals for a user
+  async getActiveReferrals(userId) {
+    try {
+      const { data: referrals, error } = await supabase
+        .from('referrals')
+        .select(`
+          id,
+          referral_code,
+          status,
+          metadata,
+          referred:referred_id (
+            id,
+            email,
+            created_at
+          )
+        `)
+        .eq('referrer_id', userId)
+        .eq('status', 'active');
+
+      if (error) throw error;
+      return referrals;
+    } catch (error) {
+      console.error('Error fetching active referrals:', error);
+      throw error;
     }
   },
 
@@ -477,5 +615,176 @@ export const ReferralService = {
       console.error('Error fetching daily stats:', error);
       return [];
     }
-  }
+  },
+
+  // Generate multiple referral codes
+  async generateReferralCodes(userId, count = 3) {
+    try {
+      const codes = [];
+      for (let i = 0; i < count; i++) {
+        // Generate a unique code with timestamp and user ID for uniqueness
+        const timestamp = Date.now().toString(36);
+        const userFragment = userId.slice(-4);
+        const randomPart = Math.random().toString(36).substr(2, 4).toUpperCase();
+        const code = `BF${timestamp}${userFragment}${randomPart}`;
+        codes.push(code);
+      }
+      return codes;
+    } catch (error) {
+      console.error('Error generating referral codes:', error);
+      throw error;
+    }
+  },
+
+  // Generate a unique referral code
+  generateReferralCode(userId) {
+    // Generate a unique code with timestamp and user ID for uniqueness
+    const timestamp = Date.now().toString(36);
+    const userFragment = userId.slice(-4);
+    const randomPart = Math.random().toString(36).substr(2, 4).toUpperCase();
+    return `BF${timestamp}${userFragment}${randomPart}`;
+  },
+
+  // Generate authenticated referral link
+  generateReferralLink(code) {
+    // Use window.location.origin as fallback for baseUrl
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    
+    // Create a timestamp for link expiry verification
+    const ts = Date.now();
+    
+    // Get JWT secret from environment or use a default for development
+    const jwtSecret = process.env.NEXT_PUBLIC_SUPABASE_JWT_SECRET || 'your-development-secret';
+    
+    // Create a signature for security
+    const sig = crypto
+      .createHmac('sha256', jwtSecret)
+      .update(`${code}-${ts}`)
+      .digest('hex')
+      .slice(0, 8);
+
+    // Return the full referral link
+    return `${baseUrl}/register?ref=${code}&t=${ts}&s=${sig}`;
+  },
+
+  // Create a new referral link
+  async createReferralLink(userId) {
+    try {
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+
+      // Generate a unique referral code
+      const referralCode = this.generateReferralCode(userId);
+
+      // Create the referral record
+      const { data: referral, error: referralError } = await supabase
+        .from('referrals')
+        .insert({
+          referrer_id: userId,
+          referral_code: referralCode,
+          status: 'active',
+          total_rewards: 0,
+          metadata: {}
+        })
+        .select()
+        .single();
+
+      if (referralError) {
+        console.error('Error creating referral:', referralError);
+        throw referralError;
+      }
+
+      // Generate the full referral link
+      const referralLink = this.generateReferralLink(referralCode);
+
+      return {
+        success: true,
+        referral: {
+          ...referral,
+          link: referralLink
+        }
+      };
+    } catch (error) {
+      console.error('Error in createReferralLink:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  // Activate referral links after successful payment
+  async activateReferralLinks(userId) {
+    try {
+      console.log('Activating referral links for user:', userId);
+      
+      // Generate 3 referral codes
+      const referralCodes = await this.generateReferralCodes(userId);
+      
+      // Create referral entries with authenticated links
+      const referrals = await Promise.all(referralCodes.map(async code => {
+        const ts = Date.now();
+        const sig = crypto
+          .createHmac('sha256', process.env.NEXT_PUBLIC_SUPABASE_JWT_SECRET || '')
+          .update(`${code}-${ts}`)
+          .digest('hex')
+          .slice(0, 8);
+
+        const referralLink = `${process.env.NEXT_PUBLIC_APP_URL}/refer/${code}?t=${ts}&s=${sig}`;
+        
+        return {
+          referrer_id: userId,
+          referral_code: code,
+          status: 'active',
+          total_rewards: 0,
+          metadata: {
+            referral_link: referralLink,
+            ts,
+            sig,
+            activated_at: new Date().toISOString()
+          }
+        };
+      }));
+
+      console.log('Creating referral entries:', referrals);
+
+      const { data, error } = await supabase
+        .from('referrals')
+        .insert(referrals)
+        .select();
+
+      if (error) {
+        console.error('Error creating referrals:', error);
+        throw error;
+      }
+
+      // Create activity entries for the referrals
+      const activities = data.map(referral => ({
+        referral_id: referral.id,
+        user_id: userId,
+        activity_type: 'signup',
+        description: 'Referral link activated after payment'
+      }));
+
+      const { error: activityError } = await supabase
+        .from('referral_activities')
+        .insert(activities);
+
+      if (activityError) {
+        console.error('Error creating activities:', activityError);
+        throw activityError;
+      }
+
+      // Return referral links instead of just codes
+      return {
+        success: true,
+        referralLinks: data.map(r => r.metadata.referral_link),
+        message: 'Referral links activated successfully'
+      };
+    } catch (error) {
+      console.error('Error activating referral links:', error);
+      throw error;
+    }
+  },
 };

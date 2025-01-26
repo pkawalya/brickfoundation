@@ -1,4 +1,5 @@
--- Drop existing tables and their dependencies with CASCADE
+-- Drop all existing tables and functions
+DROP FUNCTION IF EXISTS verify_referral_link CASCADE;
 DROP TABLE IF EXISTS public.rewards CASCADE;
 DROP TABLE IF EXISTS public.referral_activities CASCADE;
 DROP TABLE IF EXISTS public.referrals CASCADE;
@@ -8,14 +9,14 @@ DROP TABLE IF EXISTS public.payments CASCADE;
 -- Create payments table first (no dependencies)
 CREATE TABLE IF NOT EXISTS public.payments (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES auth.users(id),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     flw_tx_id TEXT NOT NULL,
     flw_tx_ref TEXT NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
     currency TEXT NOT NULL DEFAULT 'UGX',
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
     provider TEXT NOT NULL DEFAULT 'flutterwave',
-    metadata JSONB,
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -33,37 +34,24 @@ CREATE TABLE IF NOT EXISTS public.referral_tiers (
 -- Create referrals table (depends on auth.users)
 CREATE TABLE IF NOT EXISTS public.referrals (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    referrer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    referred_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    referrer_id UUID NOT NULL,
+    referred_id UUID,
     referral_code TEXT NOT NULL UNIQUE,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'inactive')),
     total_rewards DECIMAL(10,2) DEFAULT 0,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_referrer FOREIGN KEY (referrer_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_referred FOREIGN KEY (referred_id) REFERENCES auth.users(id) ON DELETE SET NULL,
     CONSTRAINT unique_active_referral UNIQUE (referrer_id, referred_id)
 );
 
--- Create function to validate referral link
-CREATE OR REPLACE FUNCTION verify_referral_link(code TEXT, timestamp BIGINT, signature TEXT)
-RETURNS BOOLEAN AS $$
-DECLARE
-    expected_signature TEXT;
-BEGIN
-    -- Create expected signature using the same method as in ReferralService
-    expected_signature := encode(
-        hmac(
-            code || '-' || timestamp::TEXT,
-            current_setting('app.jwt_secret', TRUE),
-            'sha256'
-        ),
-        'hex'
-    );
-    
-    -- Compare first 8 characters of signatures
-    RETURN LEFT(expected_signature, 8) = signature;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- Create indexes for referrals table
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON public.referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referred_id ON public.referrals(referred_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_status ON public.referrals(status);
+CREATE INDEX IF NOT EXISTS idx_referrals_code ON public.referrals(referral_code);
 
 -- Create referral_activities table
 CREATE TABLE IF NOT EXISTS public.referral_activities (
@@ -86,6 +74,30 @@ CREATE TABLE IF NOT EXISTS public.rewards (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create function to validate referral link
+CREATE OR REPLACE FUNCTION verify_referral_link(
+    ref_code TEXT,
+    ts BIGINT,
+    sig TEXT
+) RETURNS BOOLEAN AS $$
+DECLARE
+    expected_signature TEXT;
+BEGIN
+    -- Create expected signature using the same method as in ReferralService
+    expected_signature := encode(
+        hmac(
+            ref_code || '-' || ts::TEXT,
+            current_setting('app.jwt_secret', TRUE),
+            'sha256'
+        ),
+        'hex'
+    );
+    
+    -- Compare first 8 characters of signatures
+    RETURN LEFT(expected_signature, 8) = sig;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Enable RLS
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
@@ -114,8 +126,8 @@ CREATE POLICY "Allow read access to own referrals" ON public.referrals
             status = 'active' AND 
             verify_referral_link(
                 referral_code,
-                (metadata->>'timestamp')::BIGINT,
-                metadata->>'signature'
+                (metadata->>'ts')::BIGINT,
+                metadata->>'sig'
             )
         )
     );
