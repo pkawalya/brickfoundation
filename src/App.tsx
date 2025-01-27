@@ -5,11 +5,11 @@ import { Register } from './components/auth/Register';
 import { Login } from './components/auth/Login';
 import { AdminDashboard } from './components/dashboard/AdminDashboard';
 import { UserDashboard } from './components/dashboard/UserDashboard';
-import { ReferralsPage } from './components/dashboard/ReferralsPage';
 import { PasswordResetRequest } from './components/auth/PasswordResetRequest';
 import { PasswordReset } from './components/auth/PasswordReset';
 import { useAuthStore } from './store/auth';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
+import MyReferrals from './pages/my-referrals';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -83,7 +83,15 @@ function App() {
             path="referrals"
             element={
               <PrivateRoute>
-                <ReferralsPage />
+                <MyReferrals />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="my-referrals"
+            element={
+              <PrivateRoute>
+                <MyReferrals />
               </PrivateRoute>
             }
           />

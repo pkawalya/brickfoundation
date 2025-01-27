@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase } from '../config/supabaseClient';
 
 export interface ReferralTier {
   id: string;
@@ -8,18 +8,6 @@ export interface ReferralTier {
   benefits: {
     perks: string[];
   };
-}
-
-export interface Referral {
-  id: string;
-  referrer_id: string;
-  referred_email: string;
-  status: 'pending' | 'active' | 'inactive';
-  created_at: string;
-  tier_id?: string;
-  signup_date?: string;
-  last_active?: string;
-  total_rewards: number;
 }
 
 export interface ReferralReward {
@@ -33,147 +21,170 @@ export interface ReferralReward {
   processed_at?: string;
 }
 
-export const referralService = {
-  // Create a new referral
-  async createReferral(referredEmail: string) {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('User not authenticated');
+export interface ReferralStats {
+  total: number;
+  active: number;
+  pending: number;
+  inactive: number;
+  totalRewards: number;
+}
 
-    const { data, error } = await supabase
-      .from('referrals')
-      .insert({
-        referrer_id: user.user.id,
-        referred_email: referredEmail,
-      })
-      .select()
-      .single();
+export interface Referral {
+  id: string;
+  referrer_id: string;
+  referred_id?: string;
+  referred_email: string;
+  referral_code: string;
+  status: 'pending' | 'active' | 'inactive';
+  total_rewards: number;
+  created_at: string;
+  updated_at: string;
+  referred_user?: {
+    email: string;
+    full_name: string;
+  };
+}
 
-    if (error) throw error;
-    return data;
-  },
+class ReferralServiceClass {
+  private async getCurrentUserId(): Promise<string> {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      throw new Error('User not authenticated');
+    }
+    return user.id;
+  }
 
-  // Get user's referral tree
-  async getReferralTree() {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('User not authenticated');
+  async getReferralStats(): Promise<ReferralStats> {
+    try {
+      const userId = await this.getCurrentUserId();
+      const { data: referrals, error } = await supabase
+        .from('referrals')
+        .select('status, total_rewards')
+        .eq('referrer_id', userId);
 
-    const { data, error } = await supabase
-      .rpc('get_referral_tree', {
-        user_id: user.user.id
-      });
+      if (error) throw error;
 
-    if (error) throw error;
-    return data;
-  },
+      const stats = {
+        total: referrals.length,
+        active: referrals.filter(r => r.status === 'active').length,
+        pending: referrals.filter(r => r.status === 'pending').length,
+        inactive: referrals.filter(r => r.status === 'inactive').length,
+        totalRewards: referrals.reduce((sum, r) => sum + (r.total_rewards || 0), 0)
+      };
 
-  // Get user's current tier
-  async getCurrentTier() {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('User not authenticated');
+      return stats;
+    } catch (error) {
+      console.error('Error getting referral stats:', error);
+      throw error;
+    }
+  }
 
-    const { data: tierId, error: tierError } = await supabase
-      .rpc('get_user_tier', {
-        user_id: user.user.id
-      });
+  async getReferralTree(): Promise<Referral[]> {
+    try {
+      const userId = await this.getCurrentUserId();
+      const { data, error } = await supabase
+        .from('referrals')
+        .select(`
+          *,
+          referred_user:referred_id(
+            email,
+            raw_user_meta_data->>'full_name' as full_name
+          ),
+          referred_user_email:referred_email(
+            email
+          )
+        `)
+        .eq('referrer_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (tierError) throw tierError;
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting referral tree:', error);
+      throw error;
+    }
+  }
 
-    if (tierId) {
-      const { data: tier, error: tierDataError } = await supabase
-        .from('referral_tiers')
-        .select('*')
-        .eq('id', tierId)
+  async createReferral(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const userId = await this.getCurrentUserId();
+      
+      // First create or get a referral link
+      const { data: existingLink, error: linkError } = await supabase
+        .from('referral_links')
+        .select('code')
+        .eq('referrer_id', userId)
+        .eq('status', 'active')
+        .limit(1)
         .single();
 
-      if (tierDataError) throw tierDataError;
-      return tier;
-    }
-
-    return null;
-  },
-
-  // Get all tiers
-  async getAllTiers() {
-    const { data, error } = await supabase
-      .from('referral_tiers')
-      .select('*')
-      .order('min_referrals', { ascending: true });
-
-    if (error) throw error;
-    return data;
-  },
-
-  // Get user's rewards
-  async getRewards() {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('User not authenticated');
-
-    const { data, error } = await supabase
-      .from('referral_rewards')
-      .select('*')
-      .eq('referrer_id', user.user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data;
-  },
-
-  // Get referral statistics
-  async getReferralStats() {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('User not authenticated');
-
-    const { data: referrals, error: referralsError } = await supabase
-      .from('referrals')
-      .select('status, total_rewards')
-      .eq('referrer_id', user.user.id);
-
-    if (referralsError) throw referralsError;
-
-    const stats = {
-      total: 0,
-      active: 0,
-      pending: 0,
-      inactive: 0,
-      totalRewards: 0,
-    };
-
-    if (referrals) {
-      referrals.forEach(referral => {
-        stats.total++;
-        stats[referral.status]++;
-        stats.totalRewards += referral.total_rewards || 0;
-      });
-    }
-
-    return stats;
-  },
-
-  // Share referral link
-  async shareReferralLink(method: 'email' | 'copy' | 'share') {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) throw new Error('User not authenticated');
-
-    const referralLink = `${window.location.origin}/join?ref=${user.user.id}`;
-
-    switch (method) {
-      case 'email':
-        window.location.href = `mailto:?subject=Join%20The%20Brick%20Foundation&body=Join%20me%20on%20The%20Brick%20Foundation!%20Use%20my%20referral%20link:%20${encodeURIComponent(referralLink)}`;
-        break;
-      case 'copy':
-        await navigator.clipboard.writeText(referralLink);
-        break;
-      case 'share':
-        if (navigator.share) {
-          await navigator.share({
-            title: 'Join The Brick Foundation',
-            text: 'Join me on The Brick Foundation!',
-            url: referralLink,
+      let referralCode: string;
+      
+      if (linkError || !existingLink) {
+        // Create new referral link
+        const code = this.generateUniqueCode();
+        const { error: createLinkError } = await supabase
+          .from('referral_links')
+          .insert({
+            referrer_id: userId,
+            code,
+            status: 'active'
           });
-        }
-        break;
-    }
 
-    return referralLink;
-  },
-};
+        if (createLinkError) throw createLinkError;
+        referralCode = code;
+      } else {
+        referralCode = existingLink.code;
+      }
+
+      // Check if email is already referred
+      const { data: existingReferral, error: checkError } = await supabase
+        .from('referrals')
+        .select('id')
+        .eq('referred_email', email)
+        .limit(1)
+        .single();
+
+      if (existingReferral) {
+        return {
+          success: false,
+          message: 'This email has already been referred'
+        };
+      }
+
+      // Create the referral
+      const { error: referralError } = await supabase
+        .from('referrals')
+        .insert({
+          referrer_id: userId,
+          referred_email: email,
+          referral_code: referralCode,
+          status: 'pending'
+        });
+
+      if (referralError) throw referralError;
+
+      return {
+        success: true,
+        message: 'Referral created successfully'
+      };
+    } catch (error) {
+      console.error('Error creating referral:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to create referral'
+      };
+    }
+  }
+
+  generateReferralLink(userId: string): string {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/signup?ref=${userId}`;
+  }
+
+  private generateUniqueCode(): string {
+    return Math.random().toString(36).substring(2, 15);
+  }
+}
+
+export const ReferralService = new ReferralServiceClass();
