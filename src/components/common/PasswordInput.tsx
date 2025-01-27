@@ -11,6 +11,7 @@ interface PasswordInputProps {
   autoComplete?: string;
   error?: string;
   required?: boolean;
+  icon?: React.ReactNode;
 }
 
 export function PasswordInput({
@@ -21,7 +22,8 @@ export function PasswordInput({
   showStrengthMeter = false,
   autoComplete = 'new-password',
   error,
-  required = true
+  required = true,
+  icon
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [strength, setStrength] = useState<'weak' | 'medium' | 'strong'>('weak');
@@ -40,6 +42,11 @@ export function PasswordInput({
         {label}
       </label>
       <div className="relative mt-1">
+        {icon && (
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            {icon}
+          </div>
+        )}
         <input
           type={showPassword ? 'text' : 'password'}
           id={id}
@@ -49,29 +56,29 @@ export function PasswordInput({
           onBlur={() => setIsFocused(false)}
           autoComplete={autoComplete}
           required={required}
-          className={`appearance-none block w-full px-3 py-2 border ${
+          className={`${icon ? 'pl-10' : 'pl-3'} appearance-none block w-full px-3 py-2 border ${
             error ? 'border-red-300' : 'border-gray-300'
           } rounded-md shadow-sm placeholder-gray-400 
-          focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 
-          sm:text-sm pr-10 ${error ? 'text-red-900' : ''}`}
+          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 
+          sm:text-sm pr-10 ${error ? 'text-red-900' : ''} transition-colors duration-200`}
           placeholder="••••••••"
         />
         <button
           type="button"
-          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500 transition-colors duration-200"
           onClick={() => setShowPassword(!showPassword)}
         >
           {showPassword ? (
-            <EyeOffIcon className="h-5 w-5 text-gray-400" />
+            <EyeOffIcon className="h-5 w-5" />
           ) : (
-            <EyeIcon className="h-5 w-5 text-gray-400" />
+            <EyeIcon className="h-5 w-5" />
           )}
         </button>
       </div>
 
       {/* Error message */}
       {error && (
-        <p className="mt-2 text-sm text-red-600">
+        <p className="mt-2 text-sm text-red-600 animate-fade-in">
           {error}
         </p>
       )}
@@ -80,18 +87,18 @@ export function PasswordInput({
       {showStrengthMeter && value && (
         <div className="mt-2 space-y-2">
           <div className="flex space-x-1 h-1">
-            <div className={`flex-1 rounded-full transition-colors duration-200 ${
+            <div className={`flex-1 rounded-full transition-all duration-300 ${
               strength === 'weak' ? getPasswordStrengthColor('weak') : 'bg-gray-200'
             }`} />
-            <div className={`flex-1 rounded-full transition-colors duration-200 ${
+            <div className={`flex-1 rounded-full transition-all duration-300 ${
               strength === 'medium' ? getPasswordStrengthColor('medium') : 'bg-gray-200'
             }`} />
-            <div className={`flex-1 rounded-full transition-colors duration-200 ${
+            <div className={`flex-1 rounded-full transition-all duration-300 ${
               strength === 'strong' ? getPasswordStrengthColor('strong') : 'bg-gray-200'
             }`} />
           </div>
           {isFocused && (
-            <p className={`text-sm ${
+            <p className={`text-sm transition-colors duration-200 ${
               strength === 'weak' ? 'text-red-600' :
               strength === 'medium' ? 'text-yellow-600' : 'text-green-600'
             }`}>
@@ -99,37 +106,6 @@ export function PasswordInput({
             </p>
           )}
         </div>
-      )}
-
-      {/* Password requirements */}
-      {showStrengthMeter && isFocused && (
-        <ul className="mt-2 text-sm text-gray-500 space-y-1">
-          <li className={`flex items-center ${
-            value.length >= 8 ? 'text-green-600' : ''
-          }`}>
-            • At least 8 characters
-          </li>
-          <li className={`flex items-center ${
-            /[A-Z]/.test(value) ? 'text-green-600' : ''
-          }`}>
-            • One uppercase letter
-          </li>
-          <li className={`flex items-center ${
-            /[a-z]/.test(value) ? 'text-green-600' : ''
-          }`}>
-            • One lowercase letter
-          </li>
-          <li className={`flex items-center ${
-            /[0-9]/.test(value) ? 'text-green-600' : ''
-          }`}>
-            • One number
-          </li>
-          <li className={`flex items-center ${
-            /[!@#$%^&*(),.?":{}|<>]/.test(value) ? 'text-green-600' : ''
-          }`}>
-            • One special character
-          </li>
-        </ul>
       )}
     </div>
   );
