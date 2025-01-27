@@ -18,10 +18,10 @@ export function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleInputChange = (field: string) => (value: string) => {
+  const handleInputChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: e.target.value
     }));
     setError(''); // Clear error when user makes changes
   };
@@ -59,8 +59,6 @@ export function Register() {
     setIsLoading(true);
 
     try {
-      console.log('Starting registration process...'); // Debug log
-
       // Register user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email.toLowerCase().trim(),
@@ -75,16 +73,8 @@ export function Register() {
         }
       });
 
-      console.log('Auth registration response:', { authData, authError }); // Debug log
-
-      if (authError) {
-        console.error('Auth error:', authError); // Debug log
-        throw authError;
-      }
-
-      if (!authData.user) {
-        throw new Error('No user data returned from auth');
-      }
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('No user data returned from auth');
 
       // Sign out the user since we want them to verify their email first
       await supabase.auth.signOut();
@@ -106,116 +96,126 @@ export function Register() {
   };
 
   return (
-    <AuthLayout
-      title="Create an account"
-      subtitle="Get started with your free account"
-      type="register"
-    >
-      <form onSubmit={handleRegister} className="space-y-6">
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-              First name
-            </label>
-            <div className="mt-1">
-              <input
-                type="text"
-                id="firstName"
-                required
-                value={formData.firstName}
-                onChange={(e) => handleInputChange('firstName')(e.target.value)}
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md 
-                  shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 
-                  focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-              Last name
-            </label>
-            <div className="mt-1">
-              <input
-                type="text"
-                id="lastName"
-                required
-                value={formData.lastName}
-                onChange={(e) => handleInputChange('lastName')(e.target.value)}
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md 
-                  shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 
-                  focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email address
-          </label>
-          <div className="mt-1">
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={formData.email}
-              onChange={(e) => handleInputChange('email')(e.target.value)}
-              className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md 
-                shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 
-                focus:border-indigo-500 sm:text-sm"
-            />
-          </div>
-        </div>
-
-        <PasswordInput
-          id="password"
-          label="Password"
-          value={formData.password}
-          onChange={handleInputChange('password')}
-          showStrengthMeter
-          autoComplete="new-password"
-        />
-
-        <PasswordInput
-          id="confirmPassword"
-          label="Confirm password"
-          value={formData.confirmPassword}
-          onChange={handleInputChange('confirmPassword')}
-          autoComplete="new-password"
-        />
-
-        <div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md 
-              shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 
-              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 
-              disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <LoadingSpinner className="h-5 w-5" />
-            ) : (
-              'Create account'
-            )}
-          </button>
-        </div>
-
-        <div className="text-sm text-center">
-          Already have an account?{' '}
+    <AuthLayout>
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          Create your account
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Or{' '}
           <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-            Sign in
+            sign in to your account
           </Link>
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <form className="space-y-6" onSubmit={handleRegister}>
+            {/* First Name */}
+            <div>
+              <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                First Name
+              </label>
+              <div className="mt-1">
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  required
+                  value={formData.firstName}
+                  onChange={handleInputChange('firstName')}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Last Name */}
+            <div>
+              <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                Last Name
+              </label>
+              <div className="mt-1">
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  required
+                  value={formData.lastName}
+                  onChange={handleInputChange('lastName')}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Email */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email address
+              </label>
+              <div className="mt-1">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={handleInputChange('email')}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <PasswordInput
+                id="password"
+                label="Password"
+                value={formData.password}
+                onChange={handleInputChange('password')}
+                showStrengthMeter={true}
+                autoComplete="new-password"
+              />
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <PasswordInput
+                id="confirmPassword"
+                label="Confirm Password"
+                value={formData.confirmPassword}
+                onChange={handleInputChange('confirmPassword')}
+                autoComplete="new-password"
+              />
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="rounded-md bg-red-50 p-4">
+                <div className="flex">
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      {error}
+                    </h3>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? <LoadingSpinner /> : 'Create Account'}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </AuthLayout>
   );
 }

@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { supabase } from './supabaseClient';
 
 interface PaymentResponse {
   status: 'success' | 'failed';
@@ -20,7 +20,7 @@ interface Payment {
   flw_tx_ref: string;
   amount: number;
   currency: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'successful' | 'failed';
   provider: 'flutterwave';
   metadata: PaymentMetadata;
   created_at: string;
@@ -29,11 +29,10 @@ interface Payment {
 
 class PaymentServiceClass {
   private async getCurrentUserId(): Promise<string> {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) {
-      throw new Error('User not authenticated');
-    }
-    return user.id;
+    const { data: session, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!session?.session?.user) throw new Error('No authenticated user');
+    return session.session.user.id;
   }
 
   async initializePayment(amount: number, email: string, phone: string, name: string): Promise<PaymentResponse> {
@@ -107,7 +106,7 @@ class PaymentServiceClass {
         .eq('flw_tx_ref', tx_ref)
         .single();
 
-      if (localPayment?.status === 'completed') {
+      if (localPayment?.status === 'successful') {
         return {
           status: 'success',
           flw_tx_id: localPayment.flw_tx_id,
@@ -177,7 +176,7 @@ class PaymentServiceClass {
         .from('payments')
         .select('*')
         .eq('user_id', userId)
-        .eq('status', 'completed')
+        .eq('status', 'successful')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();

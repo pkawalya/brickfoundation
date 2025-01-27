@@ -13,7 +13,7 @@
     "@fontsource/inter": "^5.1.1",
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",
-    "@supabase/supabase-js": "^2.39.7",
+    "@supabase/supabase-js": "^2.48.1",
     "flutterwave-node-v3": "^1.1.14",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",

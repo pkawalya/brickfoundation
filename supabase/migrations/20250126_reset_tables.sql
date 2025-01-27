@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
     flw_tx_ref TEXT NOT NULL UNIQUE,
     amount DECIMAL(10,2) NOT NULL,
     currency TEXT NOT NULL DEFAULT 'UGX',
-    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'successful', 'failed')),
     provider TEXT NOT NULL DEFAULT 'flutterwave',
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -32,6 +32,8 @@ CREATE OR REPLACE FUNCTION public.process_payment(
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+  v_code TEXT;
 BEGIN
   -- Insert payment record
   INSERT INTO public.payments (
@@ -49,7 +51,7 @@ BEGIN
     p_flw_tx_ref,
     p_amount,
     p_currency,
-    'completed',
+    'successful',
     'flutterwave',
     jsonb_build_object(
       'payment_type', 'referral_activation',
@@ -58,34 +60,42 @@ BEGIN
   );
 
   -- Deactivate existing active referral links
-  UPDATE public.referrals
+  UPDATE public.referral_links
   SET 
     status = 'inactive',
-    updated_at = timezone('utc'::text, now())
+    metadata = jsonb_set(
+      metadata,
+      '{deactivated_at}',
+      to_jsonb(timezone('utc'::text, now()))
+    )
   WHERE 
     referrer_id = p_user_id 
     AND status = 'active';
 
   -- Create 3 new active referral links
-  INSERT INTO public.referrals (
-    referrer_id,
-    referred_id,
-    referral_code,
-    status,
-    metadata
-  )
-  SELECT
-    p_user_id,
-    NULL,
-    'BF-' || encode(gen_random_bytes(8), 'hex'),
-    'active',
-    jsonb_build_object(
-      'activation_date', timezone('utc'::text, now()),
-      'payment_amount', p_amount,
-      'payment_currency', p_currency,
-      'payment_ref', p_flw_tx_ref
-    )
-  FROM generate_series(1, 3);
+  FOR i IN 1..3 LOOP
+    -- Generate a unique code
+    SELECT 'BF-' || substr(encode(gen_random_bytes(6), 'hex'), 1, 8)
+    INTO v_code;
+    
+    -- Insert new referral link
+    INSERT INTO public.referral_links (
+      referrer_id,
+      code,
+      status,
+      metadata
+    ) VALUES (
+      p_user_id,
+      v_code,
+      'active',
+      jsonb_build_object(
+        'activation_date', timezone('utc'::text, now()),
+        'payment_amount', p_amount,
+        'payment_currency', p_currency,
+        'payment_ref', p_flw_tx_ref
+      )
+    );
+  END LOOP;
 
   -- Commit the transaction
   COMMIT;
@@ -102,164 +112,127 @@ CREATE TABLE IF NOT EXISTS public.referral_tiers (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create referrals table (depends on auth.users)
+-- Create referrals table (depends on referral_tiers)
 CREATE TABLE IF NOT EXISTS public.referrals (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    referrer_id UUID NOT NULL,
-    referred_id UUID,
-    referral_code TEXT NOT NULL UNIQUE,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'inactive')),
-    total_rewards DECIMAL(10,2) DEFAULT 0,
-    metadata JSONB DEFAULT '{}'::jsonb,
+    referrer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    referred_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    referred_email TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'expired')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT fk_referrer FOREIGN KEY (referrer_id) REFERENCES auth.users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_referred FOREIGN KEY (referred_id) REFERENCES auth.users(id) ON DELETE SET NULL,
-    CONSTRAINT unique_active_referral UNIQUE (referrer_id, referred_id)
+    completed_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}'::jsonb
 );
 
--- Create indexes for referrals table
-CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON public.referrals(referrer_id);
-CREATE INDEX IF NOT EXISTS idx_referrals_referred_id ON public.referrals(referred_id);
-CREATE INDEX IF NOT EXISTS idx_referrals_status ON public.referrals(status);
-CREATE INDEX IF NOT EXISTS idx_referrals_code ON public.referrals(referral_code);
-
--- Create referral_activities table
-CREATE TABLE IF NOT EXISTS public.referral_activities (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    referral_id UUID NOT NULL REFERENCES public.referrals(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    activity_type TEXT NOT NULL CHECK (activity_type IN ('signup', 'verification', 'purchase', 'milestone')),
-    description TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create rewards table (depends on referrals and auth.users)
+-- Create rewards table (depends on referrals)
 CREATE TABLE IF NOT EXISTS public.rewards (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     referral_id UUID NOT NULL REFERENCES public.referrals(id) ON DELETE CASCADE,
     amount DECIMAL(10,2) NOT NULL,
-    action TEXT NOT NULL CHECK (action IN ('signup', 'purchase', 'milestone')),
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'paid')),
+    currency TEXT NOT NULL DEFAULT 'UGX',
+    status TEXT NOT NULL CHECK (status IN ('pending', 'paid', 'cancelled')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    paid_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}'::jsonb
+);
+
+-- Create referral_activities table (depends on referrals)
+CREATE TABLE IF NOT EXISTS public.referral_activities (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    referral_id UUID NOT NULL REFERENCES public.referrals(id) ON DELETE CASCADE,
+    activity_type TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}'::jsonb
+);
+
+-- Create referral_links table
+CREATE TABLE IF NOT EXISTS public.referral_links (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    referrer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    code TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create function to validate referral link
-CREATE OR REPLACE FUNCTION verify_referral_link(
-    ref_code TEXT,
-    ts BIGINT,
-    sig TEXT
-) RETURNS BOOLEAN AS $$
-DECLARE
-    expected_signature TEXT;
-BEGIN
-    -- Create expected signature using the same method as in ReferralService
-    expected_signature := encode(
-        hmac(
-            ref_code || '-' || ts::TEXT,
-            current_setting('app.jwt_secret', TRUE),
-            'sha256'
-        ),
-        'hex'
-    );
-    
-    -- Compare first 8 characters of signatures
-    RETURN LEFT(expected_signature, 8) = sig;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- Add indexes
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON public.payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_flw_tx_id ON public.payments(flw_tx_id);
+CREATE INDEX IF NOT EXISTS idx_payments_flw_tx_ref ON public.payments(flw_tx_ref);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(status);
 
--- Enable RLS
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON public.referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referred_id ON public.referrals(referred_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_status ON public.referrals(status);
+
+CREATE INDEX IF NOT EXISTS idx_rewards_user_id ON public.rewards(user_id);
+CREATE INDEX IF NOT EXISTS idx_rewards_referral_id ON public.rewards(referral_id);
+CREATE INDEX IF NOT EXISTS idx_rewards_status ON public.rewards(status);
+
+CREATE INDEX IF NOT EXISTS idx_referral_activities_referral_id ON public.referral_activities(referral_id);
+
+CREATE INDEX IF NOT EXISTS idx_referral_links_referrer_id ON public.referral_links(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referral_links_code ON public.referral_links(code);
+
+-- Set up Row Level Security (RLS)
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.referral_tiers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.referral_activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.referral_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.referral_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.referral_links ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies for payments
-CREATE POLICY "Users can view their own payments" ON public.payments
-    FOR SELECT USING (auth.uid() = user_id);
+-- Create policies
+CREATE POLICY "Users can view their own payments"
+    ON public.payments FOR SELECT
+    TO authenticated
+    USING (auth.uid() = user_id);
 
-CREATE POLICY "Allow insert for authenticated users" ON public.payments
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view their own referrals"
+    ON public.referrals FOR SELECT
+    TO authenticated
+    USING (auth.uid() = referrer_id OR auth.uid() = referred_id);
 
--- Create RLS policies for referrals and related tables
-CREATE POLICY "Allow read access to referral_tiers for all users" ON public.referral_tiers
-    FOR SELECT USING (true);
+CREATE POLICY "Users can view their own rewards"
+    ON public.rewards FOR SELECT
+    TO authenticated
+    USING (auth.uid() = user_id);
 
--- Referrals policies
-CREATE POLICY "Allow read access to own referrals" ON public.referrals
-    FOR SELECT USING (
-        auth.uid() = referrer_id OR 
-        auth.uid() = referred_id OR
-        (
-            status = 'active' AND 
-            verify_referral_link(
-                referral_code,
-                (metadata->>'ts')::BIGINT,
-                metadata->>'sig'
-            )
+CREATE POLICY "Users can view their own referral activities"
+    ON public.referral_activities FOR SELECT
+    TO authenticated
+    USING (
+        auth.uid() IN (
+            SELECT referrer_id FROM public.referrals WHERE id = referral_id
+            UNION
+            SELECT referred_id FROM public.referrals WHERE id = referral_id
         )
     );
 
-CREATE POLICY "Allow insert for authenticated users" ON public.referrals
-    FOR INSERT WITH CHECK (auth.uid() = referrer_id);
+CREATE POLICY "Everyone can view referral tiers"
+    ON public.referral_tiers FOR SELECT
+    TO authenticated
+    USING (true);
 
-CREATE POLICY "Allow update own referrals" ON public.referrals
-    FOR UPDATE USING (auth.uid() = referrer_id)
-    WITH CHECK (auth.uid() = referrer_id);
+CREATE POLICY "Users can view their own referral links"
+    ON public.referral_links FOR SELECT
+    TO authenticated
+    USING (auth.uid() = referrer_id);
 
--- Referral activities policies
-CREATE POLICY "Allow read access to own referral activities" ON public.referral_activities
-    FOR SELECT USING (auth.uid() = user_id OR 
-                     EXISTS (
-                         SELECT 1 FROM public.referrals 
-                         WHERE referrals.id = referral_activities.referral_id 
-                         AND (referrals.referrer_id = auth.uid() OR referrals.referred_id = auth.uid())
-                     ));
-
-CREATE POLICY "Allow insert own activities" ON public.referral_activities
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Rewards policies
-CREATE POLICY "Allow read access to own rewards" ON public.rewards
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Allow insert own rewards" ON public.rewards
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Allow update own rewards" ON public.rewards
-    FOR UPDATE USING (auth.uid() = user_id)
-    WITH CHECK (auth.uid() = user_id);
-
--- Create indexes
-CREATE INDEX IF NOT EXISTS payments_user_id_idx ON public.payments(user_id);
-CREATE INDEX IF NOT EXISTS payments_flw_tx_id_idx ON public.payments(flw_tx_id);
-CREATE INDEX IF NOT EXISTS payments_flw_tx_ref_idx ON public.payments(flw_tx_ref);
-CREATE INDEX IF NOT EXISTS payments_status_idx ON public.payments(status);
-
-CREATE INDEX IF NOT EXISTS referrals_referrer_id_idx ON public.referrals(referrer_id);
-CREATE INDEX IF NOT EXISTS referrals_referred_id_idx ON public.referrals(referred_id);
-CREATE INDEX IF NOT EXISTS referrals_status_idx ON public.referrals(status);
-CREATE INDEX IF NOT EXISTS referrals_code_idx ON public.referrals(referral_code);
-
-CREATE INDEX IF NOT EXISTS referral_activities_referral_id_idx ON public.referral_activities(referral_id);
-CREATE INDEX IF NOT EXISTS referral_activities_user_id_idx ON public.referral_activities(user_id);
-CREATE INDEX IF NOT EXISTS rewards_user_id_idx ON public.rewards(user_id);
-CREATE INDEX IF NOT EXISTS rewards_referral_id_idx ON public.rewards(referral_id);
-
--- Grant permissions
-GRANT SELECT ON public.referral_tiers TO authenticated, anon;
-GRANT SELECT, INSERT, UPDATE ON public.referrals TO authenticated;
-GRANT SELECT, INSERT ON public.referral_activities TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.rewards TO authenticated;
-GRANT SELECT, INSERT ON public.payments TO authenticated;
+-- Grant access to authenticated users
+GRANT SELECT ON public.payments TO authenticated;
+GRANT SELECT ON public.referrals TO authenticated;
+GRANT SELECT ON public.rewards TO authenticated;
+GRANT SELECT ON public.referral_activities TO authenticated;
+GRANT SELECT ON public.referral_tiers TO authenticated;
+GRANT SELECT ON public.referral_links TO authenticated;
 
 -- Insert default tiers
 INSERT INTO public.referral_tiers (name, min_referrals, reward_multiplier) VALUES
     ('Bronze', 0, 1.00),
     ('Silver', 5, 1.25),
-    ('Gold', 15, 1.50),
-    ('Platinum', 30, 2.00)
-ON CONFLICT DO NOTHING;
+    ('Gold', 10, 1.50),
+    ('Platinum', 20, 2.00)
+ON CONFLICT (id) DO NOTHING;

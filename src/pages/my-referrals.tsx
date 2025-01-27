@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { ReferralService, ReferralLink } from '../lib/referralService';
 import { PaymentService } from '../lib/paymentService';
-import { Link as LinkIcon, Users, Copy, CheckCircle } from 'lucide-react';
+import { Link as LinkIcon, Users, Copy, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function MyReferrals() {
@@ -13,6 +13,7 @@ export default function MyReferrals() {
   const [error, setError] = useState<string | null>(null);
   const [hasActivePayment, setHasActivePayment] = useState(false);
   const [copiedLinks, setCopiedLinks] = useState<Record<string, boolean>>({});
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -20,25 +21,50 @@ export default function MyReferrals() {
         setLoading(true);
         setError(null);
 
-        if (!user) return;
+        if (!user) {
+          setError('Please log in to view your referrals');
+          return;
+        }
 
-        // Fetch referral links
-        const links = await ReferralService.getReferralLinks();
-        setReferralLinks(links);
+        // Fetch data in parallel
+        const [links, latestPayment] = await Promise.all([
+          ReferralService.getReferralLinks().catch(err => {
+            console.error('Error fetching referral links:', err);
+            throw new Error('Failed to load referral links');
+          }),
+          PaymentService.getLatestPayment(user.id).catch(err => {
+            console.error('Error fetching payment status:', err);
+            throw new Error('Failed to check payment status');
+          })
+        ]);
 
-        // Check if user has an active payment
-        const latestPayment = await PaymentService.getLatestPayment(user.id);
+        setReferralLinks(links || []);
         setHasActivePayment(!!latestPayment && latestPayment.status === 'successful');
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load referral data. Please try again later.');
+        setError(err instanceof Error ? err.message : 'Failed to load referral data. Please try again later.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [user]);
+  }, [user, retryCount]);
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    toast.promise(
+      new Promise((resolve) => {
+        setLoading(true);
+        setTimeout(resolve, 500); // Give UI time to show loading state
+      }),
+      {
+        loading: 'Retrying...',
+        success: 'Retrying to load data',
+        error: 'Failed to retry'
+      }
+    );
+  };
 
   const copyToClipboard = async (code: string) => {
     try {
@@ -49,7 +75,6 @@ export default function MyReferrals() {
       setCopiedLinks(prev => ({ ...prev, [code]: true }));
       toast.success('Referral link copied to clipboard!');
       
-      // Reset copied state after 2 seconds
       setTimeout(() => {
         setCopiedLinks(prev => ({ ...prev, [code]: false }));
       }, 2000);
@@ -86,25 +111,59 @@ export default function MyReferrals() {
 
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
+                <div>
+                  <button
+                    onClick={handleRetry}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    Retry
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
           <div className="space-y-6">
+            {/* Quick Stats */}
+            <section>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Stats</h2>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="bg-white overflow-hidden shadow rounded-lg">
+                  <div className="p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <LinkIcon className="h-6 w-6 text-gray-400" />
+                      </div>
+                      <div className="ml-5 w-0 flex-1">
+                        <dl>
+                          <dt className="text-sm font-medium text-gray-500 truncate">
+                            Active Links
+                          </dt>
+                          <dd className="text-lg font-medium text-gray-900">
+                            {referralLinks.length}
+                          </dd>
+                        </dl>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* Referral Links Section */}
             <section>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-medium text-gray-900">Your Referral Links</h2>
-                {referralLinks.length > 0 && (
+                {referralLinks.length > 0 && hasActivePayment && (
                   <Link
                     to="/dashboard/get-referral-links"
                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-indigo-600 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -200,34 +259,6 @@ export default function MyReferrals() {
                 )}
               </div>
             </section>
-
-            {/* Quick Stats */}
-            {referralLinks.length > 0 && (
-              <section>
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Stats</h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
-                    <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <LinkIcon className="h-6 w-6 text-gray-400" />
-                        </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Active Links</dt>
-                            <dd className="flex items-baseline">
-                              <div className="text-2xl font-semibold text-gray-900">
-                                {referralLinks.length}
-                              </div>
-                            </dd>
-                          </dl>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
           </div>
         </div>
       </div>
