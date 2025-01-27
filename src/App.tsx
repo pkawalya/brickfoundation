@@ -10,6 +10,8 @@ import { PasswordReset } from './components/auth/PasswordReset';
 import { useAuthStore } from './store/auth';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import MyReferrals from './pages/my-referrals';
+import GetReferralLinks from './pages/get-referral-links';
+import { Toaster } from 'react-hot-toast';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -61,81 +63,115 @@ function App() {
 
   return (
     <Router>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<PasswordResetRequest />} />
-        <Route path="/reset-password" element={<PasswordReset />} />
+      <div className="min-h-screen bg-gray-50">
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            success: {
+              duration: 2000,
+              iconTheme: {
+                primary: '#4ade80',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              duration: 3000,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<PasswordResetRequest />} />
+          <Route path="/reset-password" element={<PasswordReset />} />
 
-        {/* Protected routes */}
-        <Route path="/dashboard">
-          <Route
-            index
-            element={
-              <PrivateRoute>
-                <UserDashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="referrals"
-            element={
-              <PrivateRoute>
-                <MyReferrals />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="my-referrals"
-            element={
-              <PrivateRoute>
-                <MyReferrals />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="earnings"
-            element={
-              <PrivateRoute>
-                <div className="p-4">Earnings Page Coming Soon</div>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="raffles"
-            element={
-              <PrivateRoute>
-                <div className="p-4">Raffles Page Coming Soon</div>
-              </PrivateRoute>
-            }
-          />
-        </Route>
+          {/* Protected routes */}
+          <Route path="/dashboard">
+            <Route
+              index
+              element={
+                <PrivateRoute>
+                  <UserDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="referrals"
+              element={
+                <PrivateRoute>
+                  <MyReferrals />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="my-referrals"
+              element={
+                <PrivateRoute>
+                  <MyReferrals />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="get-referral-links"
+              element={
+                <PrivateRoute>
+                  <GetReferralLinks />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="earnings"
+              element={
+                <PrivateRoute>
+                  <div className="p-4">Earnings Page Coming Soon</div>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="raffles"
+              element={
+                <PrivateRoute>
+                  <div className="p-4">Raffles Page Coming Soon</div>
+                </PrivateRoute>
+              }
+            />
+          </Route>
 
-        {/* Admin routes */}
-        <Route path="/admin">
-          <Route
-            index
-            element={
-              <PrivateRoute requireAdmin={true}>
-                <AdminDashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="users"
-            element={
-              <PrivateRoute requireAdmin={true}>
-                <div className="p-4">User Management Coming Soon</div>
-              </PrivateRoute>
-            }
-          />
-        </Route>
+          {/* Admin routes */}
+          <Route path="/admin">
+            <Route
+              index
+              element={
+                <PrivateRoute requireAdmin={true}>
+                  <AdminDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <PrivateRoute requireAdmin={true}>
+                  <div className="p-4">User Management Coming Soon</div>
+                </PrivateRoute>
+              }
+            />
+          </Route>
 
-        {/* Catch all route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
     </Router>
   );
 }

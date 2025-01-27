@@ -10,8 +10,8 @@ DROP TABLE IF EXISTS public.payments CASCADE;
 CREATE TABLE IF NOT EXISTS public.payments (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    flw_tx_id TEXT NOT NULL,
-    flw_tx_ref TEXT NOT NULL,
+    flw_tx_id TEXT NOT NULL UNIQUE,
+    flw_tx_ref TEXT NOT NULL UNIQUE,
     amount DECIMAL(10,2) NOT NULL,
     currency TEXT NOT NULL DEFAULT 'UGX',
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
@@ -20,6 +20,77 @@ CREATE TABLE IF NOT EXISTS public.payments (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create function to process payment
+CREATE OR REPLACE FUNCTION public.process_payment(
+  p_user_id UUID,
+  p_flw_tx_id TEXT,
+  p_flw_tx_ref TEXT,
+  p_amount DECIMAL,
+  p_currency TEXT
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Insert payment record
+  INSERT INTO public.payments (
+    user_id,
+    flw_tx_id,
+    flw_tx_ref,
+    amount,
+    currency,
+    status,
+    provider,
+    metadata
+  ) VALUES (
+    p_user_id,
+    p_flw_tx_id,
+    p_flw_tx_ref,
+    p_amount,
+    p_currency,
+    'completed',
+    'flutterwave',
+    jsonb_build_object(
+      'payment_type', 'referral_activation',
+      'processed_at', timezone('utc'::text, now())
+    )
+  );
+
+  -- Deactivate existing active referral links
+  UPDATE public.referrals
+  SET 
+    status = 'inactive',
+    updated_at = timezone('utc'::text, now())
+  WHERE 
+    referrer_id = p_user_id 
+    AND status = 'active';
+
+  -- Create 3 new active referral links
+  INSERT INTO public.referrals (
+    referrer_id,
+    referred_id,
+    referral_code,
+    status,
+    metadata
+  )
+  SELECT
+    p_user_id,
+    NULL,
+    'BF-' || encode(gen_random_bytes(8), 'hex'),
+    'active',
+    jsonb_build_object(
+      'activation_date', timezone('utc'::text, now()),
+      'payment_amount', p_amount,
+      'payment_currency', p_currency,
+      'payment_ref', p_flw_tx_ref
+    )
+  FROM generate_series(1, 3);
+
+  -- Commit the transaction
+  COMMIT;
+END;
+$$;
 
 -- Create referral_tiers table (no dependencies)
 CREATE TABLE IF NOT EXISTS public.referral_tiers (

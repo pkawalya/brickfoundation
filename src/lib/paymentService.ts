@@ -4,14 +4,52 @@ interface PaymentResponse {
   status: 'success' | 'failed';
   flw_tx_id?: string;
   flw_tx_ref?: string;
+  payment_link?: string;
   error?: string;
 }
 
-export const PaymentService = {
-  async initializePayment(amount: number, email: string, phone: string, name: string): Promise<string> {
+interface PaymentMetadata {
+  payment_type: 'referral_activation';
+  processed_at?: string;
+}
+
+interface Payment {
+  id: string;
+  user_id: string;
+  flw_tx_id: string;
+  flw_tx_ref: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'completed' | 'failed';
+  provider: 'flutterwave';
+  metadata: PaymentMetadata;
+  created_at: string;
+  updated_at: string;
+}
+
+class PaymentServiceClass {
+  private async getCurrentUserId(): Promise<string> {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      throw new Error('User not authenticated');
+    }
+    return user.id;
+  }
+
+  async initializePayment(amount: number, email: string, phone: string, name: string): Promise<PaymentResponse> {
     try {
       console.log('Initializing payment:', { amount, email, phone, name });
-      const tx_ref = 'BF-' + Date.now();
+      
+      // Validate input
+      if (amount < 90000) {
+        throw new Error('Minimum payment amount is UGX 90,000');
+      }
+
+      if (!email || !phone || !name) {
+        throw new Error('Email, phone, and name are required');
+      }
+
+      const tx_ref = 'BF-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
 
       const response = await fetch('/api/payment/initialize', {
         method: 'POST',
@@ -24,27 +62,60 @@ export const PaymentService = {
           phone,
           name,
           currency: 'UGX',
-          tx_ref
+          tx_ref,
+          redirect_url: window.location.origin + '/dashboard/referrals',
+          payment_options: 'card,mobilemoney,ussd',
+          meta: {
+            payment_type: 'referral_activation',
+            user_id: await this.getCurrentUserId()
+          }
         }),
       });
 
       const data = await response.json();
       if (!response.ok) {
         console.error('Payment initialization failed:', data);
-        throw new Error(data.message);
+        return {
+          status: 'failed',
+          error: data.message || 'Failed to initialize payment'
+        };
       }
       
       console.log('Payment initialized:', data);
-      return data.payment_link;
+      return {
+        status: 'success',
+        payment_link: data.data.link,
+        flw_tx_ref: tx_ref
+      };
     } catch (error) {
       console.error('Error initializing payment:', error);
-      throw error;
+      return {
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Failed to initialize payment'
+      };
     }
-  },
+  }
 
   async verifyPayment(tx_ref: string): Promise<PaymentResponse> {
     try {
       console.log('Verifying payment:', tx_ref);
+      
+      // Check local payment status first
+      const { data: localPayment, error: localError } = await supabase
+        .from('payments')
+        .select('status, flw_tx_id')
+        .eq('flw_tx_ref', tx_ref)
+        .single();
+
+      if (localPayment?.status === 'completed') {
+        return {
+          status: 'success',
+          flw_tx_id: localPayment.flw_tx_id,
+          flw_tx_ref: tx_ref
+        };
+      }
+
+      // Verify with Flutterwave
       const response = await fetch(`/api/payment/verify/${tx_ref}`, {
         method: 'GET',
         headers: {
@@ -55,16 +126,17 @@ export const PaymentService = {
       const data = await response.json();
       if (!response.ok) {
         console.error('Payment verification failed:', data);
-        throw new Error(data.message);
+        return {
+          status: 'failed',
+          error: data.message || 'Payment verification failed'
+        };
       }
-
-      console.log('Payment verification response:', data);
 
       if (data.status === 'successful' && data.amount >= 90000) {
         return {
           status: 'success',
           flw_tx_id: data.id,
-          flw_tx_ref: data.tx_ref
+          flw_tx_ref: tx_ref
         };
       } else {
         return {
@@ -76,38 +148,51 @@ export const PaymentService = {
       console.error('Error verifying payment:', error);
       return {
         status: 'failed',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Failed to verify payment'
       };
     }
-  },
+  }
 
-  async recordPayment(userId: string, flw_tx_id: string, flw_tx_ref: string, amount: number): Promise<void> {
+  async getPaymentHistory(): Promise<Payment[]> {
     try {
-      console.log('Recording payment:', { userId, flw_tx_id, flw_tx_ref, amount });
-      const { error } = await supabase
+      const userId = await this.getCurrentUserId();
+      const { data, error } = await supabase
         .from('payments')
-        .insert({
-          user_id: userId,
-          flw_tx_id,
-          flw_tx_ref,
-          amount,
-          currency: 'UGX',
-          status: 'completed',
-          provider: 'flutterwave',
-          metadata: {
-            payment_type: 'referral_activation'
-          }
-        });
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error recording payment:', error);
-        throw error;
-      }
-
-      console.log('Payment recorded successfully');
+      if (error) throw error;
+      return data || [];
     } catch (error) {
-      console.error('Error recording payment:', error);
+      console.error('Error getting payment history:', error);
       throw error;
     }
   }
-};
+
+  async getLatestPayment(): Promise<Payment | null> {
+    try {
+      const userId = await this.getCurrentUserId();
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null; // No payment found
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting latest payment:', error);
+      throw error;
+    }
+  }
+}
+
+export const PaymentService = new PaymentServiceClass();

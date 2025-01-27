@@ -45,6 +45,15 @@ export interface Referral {
   };
 }
 
+export interface ReferralLink {
+  id: string;
+  referrer_id: string;
+  code: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  expires_at: string | null;
+}
+
 class ReferralServiceClass {
   private async getCurrentUserId(): Promise<string> {
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -89,9 +98,6 @@ class ReferralServiceClass {
           referred_user:referred_id(
             email,
             raw_user_meta_data->>'full_name' as full_name
-          ),
-          referred_user_email:referred_email(
-            email
           )
         `)
         .eq('referrer_id', userId)
@@ -105,12 +111,63 @@ class ReferralServiceClass {
     }
   }
 
+  async getReferralLinks(): Promise<ReferralLink[]> {
+    try {
+      const userId = await this.getCurrentUserId();
+      const { data, error } = await supabase
+        .from('referral_links')
+        .select('*')
+        .eq('referrer_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting referral links:', error);
+      throw error;
+    }
+  }
+
+  async activateReferralLinks(userId: string): Promise<void> {
+    try {
+      // First, deactivate any existing active links
+      const { error: deactivateError } = await supabase
+        .from('referral_links')
+        .update({ status: 'inactive' })
+        .eq('referrer_id', userId)
+        .eq('status', 'active');
+
+      if (deactivateError) throw deactivateError;
+
+      // Create 3 new active referral links
+      const newLinks = Array(3).fill(null).map(() => ({
+        referrer_id: userId,
+        code: this.generateUniqueCode(),
+        status: 'active',
+        metadata: {
+          activation_date: new Date().toISOString(),
+          payment_amount: 90000,
+          currency: 'UGX'
+        }
+      }));
+
+      const { error: createError } = await supabase
+        .from('referral_links')
+        .insert(newLinks);
+
+      if (createError) throw createError;
+    } catch (error) {
+      console.error('Error activating referral links:', error);
+      throw error;
+    }
+  }
+
   async createReferral(email: string): Promise<{ success: boolean; message: string }> {
     try {
       const userId = await this.getCurrentUserId();
       
-      // First create or get a referral link
-      const { data: existingLink, error: linkError } = await supabase
+      // Get an active referral link
+      const { data: activeLink, error: linkError } = await supabase
         .from('referral_links')
         .select('code')
         .eq('referrer_id', userId)
@@ -118,23 +175,11 @@ class ReferralServiceClass {
         .limit(1)
         .single();
 
-      let referralCode: string;
-      
-      if (linkError || !existingLink) {
-        // Create new referral link
-        const code = this.generateUniqueCode();
-        const { error: createLinkError } = await supabase
-          .from('referral_links')
-          .insert({
-            referrer_id: userId,
-            code,
-            status: 'active'
-          });
-
-        if (createLinkError) throw createLinkError;
-        referralCode = code;
-      } else {
-        referralCode = existingLink.code;
+      if (linkError || !activeLink) {
+        return {
+          success: false,
+          message: 'No active referral links available. Please make a payment to activate referral links.'
+        };
       }
 
       // Check if email is already referred
@@ -158,7 +203,7 @@ class ReferralServiceClass {
         .insert({
           referrer_id: userId,
           referred_email: email,
-          referral_code: referralCode,
+          referral_code: activeLink.code,
           status: 'pending'
         });
 
@@ -177,13 +222,83 @@ class ReferralServiceClass {
     }
   }
 
-  generateReferralLink(userId: string): string {
+  generateReferralLink(code: string): string {
     const baseUrl = window.location.origin;
-    return `${baseUrl}/signup?ref=${userId}`;
+    return `${baseUrl}/signup?ref=${code}`;
   }
 
   private generateUniqueCode(): string {
-    return Math.random().toString(36).substring(2, 15);
+    const prefix = 'BF';
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 6);
+    return `${prefix}-${timestamp}-${random}`.toUpperCase();
+  }
+
+  static async getReferralLinksStatic(userId: string): Promise<ReferralLink[]> {
+    try {
+      const { data, error } = await supabase
+        .from('referral_links')
+        .select('*')
+        .eq('referrer_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching referral links:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error in getReferralLinks:', error);
+      throw error;
+    }
+  }
+
+  static async createReferralLinkStatic(userId: string): Promise<ReferralLink> {
+    try {
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      const { data, error } = await supabase
+        .from('referral_links')
+        .insert([
+          {
+            referrer_id: userId,
+            code,
+            status: 'active'
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating referral link:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in createReferralLink:', error);
+      throw error;
+    }
+  }
+
+  static async deactivateReferralLinksStatic(userId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('referral_links')
+        .update({ status: 'inactive' })
+        .eq('referrer_id', userId)
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('Error deactivating referral links:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in deactivateReferralLinks:', error);
+      throw error;
+    }
   }
 }
 

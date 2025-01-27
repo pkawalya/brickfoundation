@@ -1,151 +1,280 @@
-import { useState } from 'react';
-import { useRouter } from 'next/router';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { PaymentService } from '../lib/paymentService';
+import { ReferralService } from '../lib/referralService';
+import {
+  CreditCard,
+  Link as LinkIcon,
+  Clock,
+  CheckCircle,
+  XCircle,
+  ArrowRight,
+  Phone,
+  Mail,
+  User,
+} from 'lucide-react';
+
+interface PaymentForm {
+  name: string;
+  email: string;
+  phone: string;
+}
 
 export default function GetReferralLinks() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [hasActiveLinks, setHasActiveLinks] = useState(false);
+  const [formData, setFormData] = useState<PaymentForm>({
+    name: '',
+    email: '',
+    phone: '',
+  });
 
-  const handleGetLinks = async () => {
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    checkActiveLinks();
+  }, [user, navigate]);
+
+  const checkActiveLinks = async () => {
     try {
-      setLoading(true);
-      setError('');
+      const links = await ReferralService.getReferralLinks();
+      setHasActiveLinks(links.some(link => link.status === 'active'));
+    } catch (err) {
+      console.error('Error checking active links:', err);
+    }
+  };
 
-      if (!user) {
-        router.push('/login?redirect=/get-referral-links');
-        return;
-      }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
-      const paymentLink = await PaymentService.initializePayment(
-        90000, // Amount in UGX
-        user.email,
-        user.phone || '',
-        user.full_name || user.email
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await PaymentService.initializePayment(
+        90000, // Fixed amount for referral links
+        formData.email,
+        formData.phone,
+        formData.name
       );
 
-      // Redirect to Flutterwave payment page
-      window.location.href = paymentLink;
-    } catch (error) {
-      console.error('Payment initialization error:', error);
-      setError('Failed to start payment process. Please try again.');
+      if (result.status === 'success' && result.payment_link) {
+        // Redirect to Flutterwave payment page
+        window.location.href = result.payment_link;
+      } else {
+        setError(result.error || 'Failed to initialize payment');
+      }
+    } catch (err) {
+      console.error('Payment error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process payment');
     } finally {
       setLoading(false);
     }
   };
 
+  if (hasActiveLinks) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <CheckCircle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Active Referral Links Available
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>
+                  You already have active referral links. Visit your referrals page to view and manage
+                  them.
+                </p>
+              </div>
+              <div className="mt-4">
+                <div className="-mx-2 -my-1.5 flex">
+                  <button
+                    onClick={() => navigate('/dashboard/referrals')}
+                    className="bg-yellow-100 px-3 py-2 rounded-md text-sm font-medium text-yellow-800 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                  >
+                    View My Referrals
+                    <ArrowRight className="ml-2 h-4 w-4 inline" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Get Your Referral Links
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Start earning rewards by sharing your unique referral links
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="text-center mb-12">
+        <LinkIcon className="mx-auto h-12 w-12 text-indigo-600" />
+        <h2 className="mt-4 text-3xl font-extrabold text-gray-900">Get Referral Links</h2>
+        <p className="mt-2 text-lg text-gray-600">
+          Make a one-time payment of UGX 90,000 to activate your referral links
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">What you get:</h3>
-              <ul className="mt-4 space-y-3">
-                <li className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-sm text-gray-500">
-                    3 unique referral links to share with friends
-                  </p>
-                </li>
-                <li className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-sm text-gray-500">
-                    Earn rewards for each successful referral
-                  </p>
-                </li>
-                <li className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-sm text-gray-500">
-                    Track your referrals and rewards in real-time
-                  </p>
-                </li>
-              </ul>
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <XCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="bg-gray-50 px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="text-center">
-                <span className="text-2xl font-extrabold text-gray-900">
-                  UGX 90,000
-                </span>
-                <p className="mt-1 text-sm text-gray-500">
-                  One-time payment for 3 referral links
-                </p>
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
+      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div className="px-6 py-8">
+          <div className="mb-8">
+            <h3 className="text-lg font-medium text-gray-900">What You Get</h3>
+            <ul className="mt-4 space-y-4">
+              <li className="flex items-start">
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
                 </div>
+                <p className="ml-3 text-sm text-gray-700">
+                  3 unique referral links to share with potential members
+                </p>
+              </li>
+              <li className="flex items-start">
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                </div>
+                <p className="ml-3 text-sm text-gray-700">
+                  Track referral status and rewards in real-time
+                </p>
+              </li>
+              <li className="flex items-start">
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                </div>
+                <p className="ml-3 text-sm text-gray-700">
+                  Earn rewards for successful referrals
+                </p>
+              </li>
+            </ul>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                Full Name
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  name="name"
+                  id="name"
+                  required
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
+                  placeholder="John Doe"
+                />
               </div>
-            )}
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email Address
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="email"
+                  name="email"
+                  id="email"
+                  required
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
+                  placeholder="you@example.com"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Phone className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="tel"
+                  name="phone"
+                  id="phone"
+                  required
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
+                  placeholder="+256 700 000000"
+                />
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-4 py-3 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Amount</p>
+                  <p className="text-sm text-gray-500">One-time payment</p>
+                </div>
+                <p className="text-lg font-semibold text-gray-900">UGX 90,000</p>
+              </div>
+            </div>
 
             <button
-              onClick={handleGetLinks}
+              type="submit"
               disabled={loading}
-              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white ${
-                loading
-                  ? 'bg-indigo-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-              }`}
+              className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                  <Clock className="animate-spin h-5 w-5 mr-2" />
                   Processing...
                 </>
               ) : (
-                'Get Your Referral Links Now'
+                <>
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Make Payment
+                </>
               )}
             </button>
-
-            <p className="mt-4 text-center text-xs text-gray-500">
-              By clicking the button above, you agree to our{' '}
-              <a href="/terms" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Terms of Service
-              </a>{' '}
-              and{' '}
-              <a href="/privacy" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Privacy Policy
-              </a>
-            </p>
-          </div>
+          </form>
         </div>
+      </div>
+
+      <div className="mt-8 text-center text-sm text-gray-500">
+        <p>
+          By proceeding with the payment, you agree to our terms and conditions regarding referral
+          links and rewards.
+        </p>
       </div>
     </div>
   );

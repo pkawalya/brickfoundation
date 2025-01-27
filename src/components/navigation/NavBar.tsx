@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/auth';
-import { Users, LogOut, Settings, Home, Gift } from 'lucide-react';
+import { Users, LogOut, Settings, Home, Gift, Link as LinkIcon } from 'lucide-react';
 
 export function NavBar() {
   const { user, signOut } = useAuthStore();
@@ -10,6 +10,14 @@ export function NavBar() {
   };
 
   if (!user) return null;
+
+  const navigation = [
+    { name: 'Home', href: '/dashboard', icon: Home },
+    { name: 'My Referrals', href: '/dashboard/referrals', icon: Users },
+    { name: 'Get Referral Links', href: '/dashboard/get-referral-links', icon: LinkIcon },
+    { name: 'Rewards', href: '/dashboard/rewards', icon: Gift },
+    { name: 'Settings', href: '/settings', icon: Settings },
+  ];
 
   return (
     <nav className="bg-white shadow-sm">
@@ -22,27 +30,16 @@ export function NavBar() {
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                to="/dashboard"
-                className="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              >
-                <Home className="h-5 w-5 mr-1" />
-                Dashboard
-              </Link>
-              <Link
-                to="/dashboard/referrals"
-                className="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              >
-                <Users className="h-5 w-5 mr-1" />
-                Referrals
-              </Link>
-              <Link
-                to="/dashboard/rewards"
-                className="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              >
-                <Gift className="h-5 w-5 mr-1" />
-                Rewards
-              </Link>
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                >
+                  <item.icon className="h-5 w-5 mr-1" />
+                  {item.name}
+                </Link>
+              ))}
             </div>
           </div>
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
