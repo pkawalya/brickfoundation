@@ -4,9 +4,9 @@ import { gradients } from '../../utils/colors';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
-  title: string;
-  subtitle: string;
-  type: 'login' | 'register';
+  title?: string;
+  subtitle?: string;
+  type?: 'login' | 'register';
 }
 
 export function AuthLayout({ children, title, subtitle, type }: AuthLayoutProps) {
@@ -55,25 +55,29 @@ export function AuthLayout({ children, title, subtitle, type }: AuthLayoutProps)
               <Logo variant="dark" className="transform hover:scale-105 transition-transform duration-200" />
             </div>
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{title}</h2>
-              <p className="mt-2 sm:mt-3 text-sm text-gray-600">
-                {subtitle}{' '}
-                {type === 'login' ? (
-                  <Link 
-                    to="/register" 
-                    className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
-                  >
-                    Create an account
-                  </Link>
-                ) : (
-                  <Link 
-                    to="/login" 
-                    className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
-                  >
-                    Sign in to your account
-                  </Link>
-                )}
-              </p>
+              {title && (
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{title}</h2>
+              )}
+              {subtitle && (
+                <p className="mt-2 sm:mt-3 text-sm text-gray-600">
+                  {subtitle}{' '}
+                  {type === 'login' ? (
+                    <Link 
+                      to="/register" 
+                      className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
+                    >
+                      Create an account
+                    </Link>
+                  ) : (
+                    <Link 
+                      to="/login" 
+                      className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
+                    >
+                      Sign in to your account
+                    </Link>
+                  )}
+                </p>
+              )}
             </div>
 
             <div className="mt-6 sm:mt-8">
