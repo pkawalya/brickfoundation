@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../config/supabaseClient';
 import { AuthLayout } from './AuthLayout';
 import { createPesapalOrder } from '../../utils/pesapal';
 import { PESAPAL_CONFIG } from '../../config/pesapal';
 
 export function Register() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -59,7 +58,14 @@ export function Register() {
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        console.error('Signup error:', signUpError);
+        throw new Error(signUpError.message);
+      }
+
+      if (!signUpData.user) {
+        throw new Error('User account creation failed');
+      }
 
       // Store user details for payment
       setUserDetails({
@@ -71,23 +77,25 @@ export function Register() {
       // Store email for reference
       setEmail(emailInput);
       
+      console.log('Creating PesaPal order for user:', signUpData.user.id);
+      
       // Immediately proceed to payment since we're using mobile money
-      if (signUpData.user) {
-        const redirectUrl = await createPesapalOrder(
-          signUpData.user.id,
-          emailInput,
-          phoneInput,
-          firstNameInput,
-          lastNameInput
-        );
+      const redirectUrl = await createPesapalOrder(
+        signUpData.user.id,
+        emailInput,
+        phoneInput,
+        firstNameInput,
+        lastNameInput
+      );
 
-        // Redirect to PesaPal payment page
-        window.location.href = redirectUrl;
-      }
+      console.log('Redirecting to PesaPal URL:', redirectUrl);
+
+      // Redirect to PesaPal payment page
+      window.location.href = redirectUrl;
 
     } catch (error: any) {
       console.error('Registration error:', error);
-      setError(error.message || 'An error occurred during registration');
+      setError(error.message || 'An error occurred during registration. Please try again.');
       setLoading(false);
     }
   };
@@ -204,7 +212,7 @@ export function Register() {
               }}
             />
             <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#6B7280' }}>
-              Enter the Mobile Money number you want to use for payment (e.g., 0712345678)
+              Enter your MTN or Airtel mobile money number (e.g., 0712345678)
             </p>
           </div>
 

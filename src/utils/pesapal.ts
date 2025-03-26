@@ -4,6 +4,7 @@ interface PesapalAuthResponse {
   token: string;
   expiryDate: string;
   error?: string;
+  error_description?: string;
 }
 
 interface PesapalOrderRequest {
@@ -28,15 +29,18 @@ interface PesapalOrderResponse {
   merchant_reference: string;
   redirect_url: string;
   error?: string;
+  error_description?: string;
 }
 
 export async function getPesapalAuthToken(): Promise<string> {
   try {
-    const response = await fetch(`${PESAPAL_CONFIG.BASE_URL}/api/Auth/RequestToken`, {
+    const baseUrl = PESAPAL_CONFIG.IS_SANDBOX ? PESAPAL_CONFIG.SANDBOX_URL : PESAPAL_CONFIG.BASE_URL;
+    
+    const response = await fetch(`${baseUrl}/api/Auth/RequestToken`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         consumer_key: PESAPAL_CONFIG.CONSUMER_KEY,
@@ -44,16 +48,22 @@ export async function getPesapalAuthToken(): Promise<string> {
       })
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('PesaPal auth error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data: PesapalAuthResponse = await response.json();
     
     if (data.error || !data.token) {
-      throw new Error(data.error || 'Failed to get auth token');
+      throw new Error(data.error_description || data.error || 'Failed to get auth token');
     }
 
     return data.token;
   } catch (error) {
     console.error('PesaPal auth error:', error);
-    throw error;
+    throw new Error('Failed to authenticate with PesaPal. Please try again later.');
   }
 }
 
@@ -67,6 +77,7 @@ export async function createPesapalOrder(
   try {
     // First get the auth token
     const token = await getPesapalAuthToken();
+    const baseUrl = PESAPAL_CONFIG.IS_SANDBOX ? PESAPAL_CONFIG.SANDBOX_URL : PESAPAL_CONFIG.BASE_URL;
 
     // Format phone number for mobile money
     // Remove leading 0 and add country code if needed
@@ -89,11 +100,13 @@ export async function createPesapalOrder(
         first_name: firstName,
         last_name: lastName
       },
-      payment_method: 'MOBILE_MONEY', // Specify mobile money as payment method
+      payment_method: 'MOMO', // Changed to MOMO for mobile money in v3
       account_number: formattedPhone // Use phone number as account number
     };
 
-    const response = await fetch(`${PESAPAL_CONFIG.BASE_URL}/api/Transactions/SubmitOrderRequest`, {
+    console.log('Sending order request:', JSON.stringify(orderRequest, null, 2));
+
+    const response = await fetch(`${baseUrl}/api/Transactions/SubmitOrderRequest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -103,15 +116,22 @@ export async function createPesapalOrder(
       body: JSON.stringify(orderRequest)
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('PesaPal order error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data: PesapalOrderResponse = await response.json();
+    console.log('PesaPal order response:', data);
 
     if (data.error || !data.redirect_url) {
-      throw new Error(data.error || 'Failed to create order');
+      throw new Error(data.error_description || data.error || 'Failed to create order');
     }
 
     return data.redirect_url;
   } catch (error) {
     console.error('PesaPal order error:', error);
-    throw error;
+    throw new Error('Failed to create payment order. Please try again later.');
   }
 }
