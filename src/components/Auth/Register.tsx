@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../config/supabaseClient';
 import AuthLayout from './AuthLayout';
+import { checkRateLimit, setRateLimit, formatTimeLeft } from '../../utils/rateLimiting';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -10,75 +11,104 @@ export default function Register() {
   const [showOTP, setShowOTP] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [timeLeft, setTimeLeft] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget);
-    const emailInput = formData.get('email') as string;
-    const passwordInput = formData.get('password') as string;
-    const confirmPassword = formData.get('confirmPassword') as string;
-    const otpInput = formData.get('otp') as string;
-
-    if (!showOTP && passwordInput !== confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
     try {
+      const formData = new FormData(e.currentTarget);
+
       if (!showOTP) {
+        const emailInput = formData.get('email') as string;
+        const passwordInput = formData.get('password') as string;
+        const confirmPassword = formData.get('confirmPassword') as string;
+        const phoneInput = formData.get('phone') as string;
+
+        if (passwordInput !== confirmPassword) {
+          setError('Passwords do not match');
+          return;
+        }
+
+        if (!phoneInput || phoneInput.length !== 10 || !/^\d+$/.test(phoneInput)) {
+          setError('Please enter a valid 10-digit phone number');
+          return;
+        }
+
+        // Check rate limit before sending
+        const { canSend, timeLeft } = checkRateLimit();
+        if (!canSend) {
+          setTimeLeft(timeLeft);
+          throw new Error(formatTimeLeft(timeLeft));
+        }
+
         // First step: Sign up
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: emailInput,
           password: passwordInput,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: `${import.meta.env.VITE_SITE_URL}/auth/callback`,
             data: {
-              email_confirmed: false
+              email_confirmed: false,
+              phone: phoneInput
             }
           }
         });
 
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          if (signUpError.message.includes('rate limit')) {
+            setRateLimit();
+            throw new Error('Too many attempts. Please try again in 60 seconds.');
+          }
+          throw signUpError;
+        }
 
-        // Store credentials and send OTP
+        // Store in users table
+        if (signUpData.user) {
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert([
+              {
+                id: signUpData.user.id,
+                email: emailInput,
+                phone: phoneInput
+              }
+            ]);
+
+          if (insertError) throw insertError;
+        }
+
+        // Set rate limit after successful send
+        setRateLimit();
+        
+        // Store credentials
         setEmail(emailInput);
         setPassword(passwordInput);
-
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email: emailInput,
-          options: {
-            shouldCreateUser: false,
-          },
+        setPhone(phoneInput);
+        setShowOTP(true);
+      } else {
+        // Verify OTP
+        const otpInput = formData.get('otp') as string;
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email,
+          token: otpInput,
+          type: 'email'
         });
 
-        if (otpError) throw otpError;
+        if (verifyError) throw verifyError;
 
-        setShowOTP(true);
-        setError(null);
-        setLoading(false);
-        return;
+        // Navigate to login
+        navigate('/login', { 
+          state: { 
+            message: 'Registration successful! You can now log in.' 
+          }
+        });
       }
-
-      // Second step: Verify OTP
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otpInput,
-        type: 'email',
-      });
-
-      if (verifyError) throw verifyError;
-
-      // Show success message and redirect to login
-      navigate('/login', { 
-        state: { 
-          message: 'Registration successful! You can now log in.' 
-        }
-      });
     } catch (error: any) {
+      console.error('Registration error:', error);
       setError(error.message || 'An error occurred during registration');
     } finally {
       setLoading(false);
@@ -107,6 +137,7 @@ export default function Register() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {!showOTP ? (
             <>
+              {/* Email field */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                   Email address
@@ -117,10 +148,31 @@ export default function Register() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 p-2 w-full border border-gray-300 rounded-md"
                 />
               </div>
 
+              {/* Phone field */}
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                  Phone number
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  required
+                  pattern="[0-9]{10}"
+                  placeholder="0712345678"
+                  className="mt-1 p-2 w-full border border-gray-300 rounded-md"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  Enter a 10-digit phone number without spaces or special characters
+                </p>
+              </div>
+
+              {/* Password field */}
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password
@@ -132,10 +184,11 @@ export default function Register() {
                   autoComplete="new-password"
                   required
                   minLength={8}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 p-2 w-full border border-gray-300 rounded-md"
                 />
               </div>
 
+              {/* Confirm Password field */}
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                   Confirm Password
@@ -147,7 +200,7 @@ export default function Register() {
                   autoComplete="new-password"
                   required
                   minLength={8}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 p-2 w-full border border-gray-300 rounded-md"
                 />
               </div>
             </>
@@ -161,7 +214,7 @@ export default function Register() {
                 name="otp"
                 type="text"
                 required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 p-2 w-full border border-gray-300 rounded-md"
                 placeholder="Enter the code sent to your email"
               />
               <p className="mt-2 text-sm text-gray-500">
@@ -169,10 +222,15 @@ export default function Register() {
               </p>
               <button
                 type="button"
-                onClick={() => setShowOTP(false)}
+                onClick={() => {
+                  setShowOTP(false);
+                  setEmail('');
+                  setPassword('');
+                  setPhone('');
+                }}
                 className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
               >
-                Use a different email
+                Use different details
               </button>
             </div>
           )}

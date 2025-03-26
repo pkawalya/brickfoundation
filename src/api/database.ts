@@ -85,5 +85,21 @@ export const databaseOperations = {
     }
   },
 
+  // Add phone_confirmed column to users table
+  async addPhoneConfirmedColumn() {
+    try {
+      await supabaseAdmin.rpc('add_column_if_not_exists', {
+        p_table: 'users',
+        p_column: 'phone_confirmed',
+        p_type: 'boolean',
+        p_default: 'false'
+      });
+      return { success: true, message: 'phone_confirmed column added successfully' };
+    } catch (error) {
+      console.error('Error adding phone_confirmed column:', error);
+      throw error;
+    }
+  },
+
   // Add more database operations as needed
 };

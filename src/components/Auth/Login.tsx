@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../config/supabaseClient';
 import AuthLayout from './AuthLayout';
+import { checkRateLimit, setRateLimit, formatTimeLeft } from '../../utils/rateLimiting';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -11,7 +12,47 @@ export default function Login() {
   const [showOTP, setShowOTP] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [timeLeft, setTimeLeft] = useState(0);
   const message = location.state?.message;
+
+  const handleSendOTP = async (email: string) => {
+    // Check rate limit before sending
+    const { canSend, timeLeft } = checkRateLimit();
+    if (!canSend) {
+      setTimeLeft(timeLeft);
+      throw new Error(formatTimeLeft(timeLeft));
+    }
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${import.meta.env.VITE_SITE_URL}/auth/callback`
+      },
+    });
+    
+    if (error) {
+      if (error.message.includes('rate limit')) {
+        setRateLimit();
+        throw new Error('Too many attempts. Please try again in 60 seconds.');
+      }
+      throw error;
+    }
+    
+    // Set rate limit after successful send
+    setRateLimit();
+    return true;
+  };
+
+  const handleVerifyOTP = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    });
+    if (error) throw error;
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -30,47 +71,41 @@ export default function Login() {
         setPassword(passwordInput);
 
         // Send OTP
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email: emailInput,
-          options: {
-            shouldCreateUser: false,
-          },
-        });
-
-        if (otpError) throw otpError;
-
+        await handleSendOTP(emailInput);
         setShowOTP(true);
-        setError(null);
       } else {
-        // Second step: Verify OTP and sign in
+        // Second step: Verify OTP
         const otpInput = formData.get('otp') as string;
 
-        // Verify OTP
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          email,
-          token: otpInput,
-          type: 'email',
-        });
+        // Verify OTP first
+        const verified = await handleVerifyOTP(email, otpInput);
+        
+        if (verified) {
+          // Only after OTP is verified, attempt password login
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
-        if (verifyError) throw verifyError;
+          if (signInError) throw signInError;
 
-        // After OTP verification, proceed with password login
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+          if (!data.user?.email_confirmed_at) {
+            await supabase.auth.signOut();
+            throw new Error('Please verify your email first.');
+          }
 
-        if (signInError) throw signInError;
-
-        if (!data.user?.email_confirmed_at) {
-          await supabase.auth.signOut();
-          throw new Error('Please verify your email first.');
+          navigate('/dashboard');
         }
-
-        navigate('/dashboard');
       }
     } catch (error: any) {
+      console.error('Login error:', error);
       setError(error.message || 'An error occurred during login');
+      if (error.message.includes('Invalid login credentials')) {
+        // Reset the form if credentials are invalid
+        setShowOTP(false);
+        setEmail('');
+        setPassword('');
+      }
     } finally {
       setLoading(false);
     }
@@ -150,12 +185,29 @@ export default function Login() {
               </p>
               <button
                 type="button"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await handleSendOTP(email);
+                    setError('A new code has been sent to your email');
+                  } catch (err: any) {
+                    setError(err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setShowOTP(false);
                   setEmail('');
                   setPassword('');
                 }}
-                className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
+                className="mt-2 ml-4 text-sm text-indigo-600 hover:text-indigo-500"
               >
                 Use a different email
               </button>
@@ -192,7 +244,7 @@ export default function Login() {
               loading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
-            {loading ? 'Processing...' : (showOTP ? 'Verify Code' : 'Send Code')}
+            {loading ? 'Processing...' : (showOTP ? 'Verify Code' : 'Send Code & Continue')}
           </button>
         </form>
       </div>
