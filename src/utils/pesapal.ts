@@ -17,11 +17,16 @@ interface PesapalOrderRequest {
   billing_address: {
     email_address: string;
     phone_number: string;
+    country_code: string;
     first_name: string;
     last_name: string;
+    line_1: string;
+    line_2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    zip_code?: string;
   };
-  payment_method: string;
-  account_number: string;
 }
 
 interface PesapalOrderResponse {
@@ -35,6 +40,8 @@ interface PesapalOrderResponse {
 export async function getPesapalAuthToken(): Promise<string> {
   try {
     const baseUrl = PESAPAL_CONFIG.IS_SANDBOX ? PESAPAL_CONFIG.SANDBOX_URL : PESAPAL_CONFIG.BASE_URL;
+    
+    console.log('Getting auth token from:', `${baseUrl}/api/Auth/RequestToken`);
     
     const response = await fetch(`${baseUrl}/api/Auth/RequestToken`, {
       method: 'POST',
@@ -55,6 +62,7 @@ export async function getPesapalAuthToken(): Promise<string> {
     }
 
     const data: PesapalAuthResponse = await response.json();
+    console.log('Auth response:', data);
     
     if (data.error || !data.token) {
       throw new Error(data.error_description || data.error || 'Failed to get auth token');
@@ -88,7 +96,7 @@ export async function createPesapalOrder(
         : `256${phone}`;
 
     const orderRequest: PesapalOrderRequest = {
-      id: `REG_${userId}_${Date.now()}`, // Unique order ID
+      id: `REG_${userId}_${Date.now()}`.substring(0, 50), // Ensure ID is not too long
       currency: PESAPAL_CONFIG.CURRENCY,
       amount: PESAPAL_CONFIG.REGISTRATION_FEE,
       description: 'Brick Foundation Registration Fee',
@@ -97,14 +105,20 @@ export async function createPesapalOrder(
       billing_address: {
         email_address: email,
         phone_number: formattedPhone,
+        country_code: 'UG',
         first_name: firstName,
-        last_name: lastName
-      },
-      payment_method: 'MOMO', // Changed to MOMO for mobile money in v3
-      account_number: formattedPhone // Use phone number as account number
+        last_name: lastName,
+        line_1: 'N/A', // Required by PesaPal
+        city: 'Kampala', // Default to Kampala
+        state: 'Kampala',
+        postal_code: '256',
+        zip_code: '256'
+      }
     };
 
-    console.log('Sending order request:', JSON.stringify(orderRequest, null, 2));
+    console.log('Creating order at:', `${baseUrl}/api/Transactions/SubmitOrderRequest`);
+    console.log('Order request:', JSON.stringify(orderRequest, null, 2));
+    console.log('Auth token:', token);
 
     const response = await fetch(`${baseUrl}/api/Transactions/SubmitOrderRequest`, {
       method: 'POST',
@@ -123,7 +137,7 @@ export async function createPesapalOrder(
     }
 
     const data: PesapalOrderResponse = await response.json();
-    console.log('PesaPal order response:', data);
+    console.log('Order response:', data);
 
     if (data.error || !data.redirect_url) {
       throw new Error(data.error_description || data.error || 'Failed to create order');
