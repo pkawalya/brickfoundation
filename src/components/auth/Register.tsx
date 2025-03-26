@@ -2,13 +2,19 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../config/supabaseClient';
 import { AuthLayout } from './AuthLayout';
+import { createPesapalOrder } from '../../utils/pesapal';
+import { PESAPAL_CONFIG } from '../../config/pesapal';
 
 export function Register() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [emailSent, setEmailSent] = useState(false);
   const [email, setEmail] = useState('');
+  const [userDetails, setUserDetails] = useState<{
+    firstName: string;
+    lastName: string;
+    phone: string;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,12 +45,11 @@ export function Register() {
         return;
       }
 
-      // Sign up with confirmation email
+      // Create user account
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: emailInput,
         password: passwordInput,
         options: {
-          emailRedirectTo: `${import.meta.env.VITE_SITE_URL}/auth/callback`,
           data: {
             phone: phoneInput,
             first_name: firstNameInput,
@@ -56,14 +61,33 @@ export function Register() {
 
       if (signUpError) throw signUpError;
 
+      // Store user details for payment
+      setUserDetails({
+        firstName: firstNameInput,
+        lastName: lastNameInput,
+        phone: phoneInput
+      });
+
       // Store email for reference
       setEmail(emailInput);
-      setEmailSent(true);
+      
+      // Immediately proceed to payment since we're using mobile money
+      if (signUpData.user) {
+        const redirectUrl = await createPesapalOrder(
+          signUpData.user.id,
+          emailInput,
+          phoneInput,
+          firstNameInput,
+          lastNameInput
+        );
+
+        // Redirect to PesaPal payment page
+        window.location.href = redirectUrl;
+      }
 
     } catch (error: any) {
       console.error('Registration error:', error);
       setError(error.message || 'An error occurred during registration');
-    } finally {
       setLoading(false);
     }
   };
@@ -96,183 +120,165 @@ export function Register() {
           </div>
         )}
 
-        {emailSent ? (
-          <div style={{ textAlign: 'center' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#111827', marginBottom: '1rem' }}>
-              Check your email
-            </h3>
-            <p style={{ color: '#4B5563', marginBottom: '1rem' }}>
-              We've sent a confirmation link to <strong>{email}</strong>
-            </p>
-            <p style={{ color: '#6B7280', fontSize: '0.875rem' }}>
-              Click the link in the email to complete your registration. If you don't see it, check your spam folder.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              style={{
-                marginTop: '2rem',
-                width: '100%',
-                padding: '0.5rem 1rem',
-                backgroundColor: '#4F46E5',
-                color: 'white',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                fontWeight: '500'
-              }}
-            >
-              Go to Login
-            </button>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label htmlFor="firstName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+                First name
+              </label>
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                autoComplete="given-name"
+                required
+                style={{
+                  marginTop: '0.25rem',
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '0.375rem'
+                }}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="lastName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+                Last name
+              </label>
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                autoComplete="family-name"
+                required
+                style={{
+                  marginTop: '0.25rem',
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '0.375rem'
+                }}
+              />
+            </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label htmlFor="firstName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                  First name
-                </label>
-                <input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  autoComplete="given-name"
-                  required
-                  style={{
-                    marginTop: '0.25rem',
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #D1D5DB',
-                    borderRadius: '0.375rem'
-                  }}
-                />
-              </div>
 
-              <div>
-                <label htmlFor="lastName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                  Last name
-                </label>
-                <input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  autoComplete="family-name"
-                  required
-                  style={{
-                    marginTop: '0.25rem',
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #D1D5DB',
-                    borderRadius: '0.375rem'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                style={{
-                  marginTop: '0.25rem',
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem'
-                }}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="phone" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                Phone number
-              </label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                autoComplete="tel"
-                required
-                pattern="[0-9]{10}"
-                placeholder="0712345678"
-                style={{
-                  marginTop: '0.25rem',
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem'
-                }}
-              />
-              <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#6B7280' }}>
-                Enter a 10-digit phone number without spaces or special characters
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                style={{
-                  marginTop: '0.25rem',
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem'
-                }}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                style={{
-                  marginTop: '0.25rem',
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem'
-                }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
+          <div>
+            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+              Email address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
               style={{
+                marginTop: '0.25rem',
                 width: '100%',
-                padding: '0.5rem 1rem',
-                backgroundColor: loading ? '#9CA3AF' : '#4F46E5',
-                color: 'white',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                cursor: loading ? 'not-allowed' : 'pointer'
+                padding: '0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem'
               }}
-            >
-              {loading ? 'Processing...' : 'Create Account'}
-            </button>
-          </form>
-        )}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="phone" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+              Mobile Money Number
+            </label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              autoComplete="tel"
+              required
+              pattern="[0-9]{10}"
+              placeholder="0712345678"
+              style={{
+                marginTop: '0.25rem',
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem'
+              }}
+            />
+            <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#6B7280' }}>
+              Enter the Mobile Money number you want to use for payment (e.g., 0712345678)
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              style={{
+                marginTop: '0.25rem',
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem'
+              }}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="confirmPassword" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+              Confirm Password
+            </label>
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              style={{
+                marginTop: '0.25rem',
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem'
+              }}
+            />
+          </div>
+
+          <div style={{ backgroundColor: '#F3F4F6', padding: '1rem', borderRadius: '0.5rem' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#111827', marginBottom: '0.5rem' }}>
+              Registration Fee
+            </h4>
+            <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#4F46E5' }}>
+              UGX {PESAPAL_CONFIG.REGISTRATION_FEE.toLocaleString()}
+            </p>
+            <p style={{ fontSize: '0.875rem', color: '#6B7280', marginTop: '0.5rem' }}>
+              Payment will be processed via Mobile Money using the number provided above
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '0.5rem 1rem',
+              backgroundColor: loading ? '#9CA3AF' : '#4F46E5',
+              color: 'white',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {loading ? 'Processing...' : 'Register & Pay'}
+          </button>
+        </form>
       </div>
     </AuthLayout>
   );

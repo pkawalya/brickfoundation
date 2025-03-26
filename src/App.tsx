@@ -12,6 +12,7 @@ import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import MyReferrals from './pages/my-referrals';
 import GetReferralLinks from './pages/get-referral-links';
 import { Toaster } from 'react-hot-toast';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -101,49 +102,49 @@ function App() {
             <Route
               index
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <UserDashboard />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="referrals"
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <MyReferrals />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="my-referrals"
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <MyReferrals />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="get-referral-links"
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <GetReferralLinks />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="earnings"
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <div className="p-4">Earnings Page Coming Soon</div>
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="raffles"
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <div className="p-4">Raffles Page Coming Soon</div>
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
           </Route>
