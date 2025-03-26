@@ -1,15 +1,15 @@
 export const PESAPAL_CONFIG = {
-  CONSUMER_KEY: 'CmDBcSQcP3p4krrNNb7ufrUn7qK6j2us',
-  CONSUMER_SECRET: '6am5uuDHalbrInizsE6Aonoyfq8=',
-  BASE_URL: 'https://pay.pesapal.com/v3', // Production URL
-  SANDBOX_URL: 'https://cybqa.pesapal.com/pesapalv3', // Sandbox URL for testing
+  CONSUMER_KEY: import.meta.env.VITE_PESAPAL_CONSUMER_KEY,
+  CONSUMER_SECRET: import.meta.env.VITE_PESAPAL_CONSUMER_SECRET,
+  BASE_URL: import.meta.env.VITE_PESAPAL_BASE_URL,
+  SANDBOX_URL: import.meta.env.VITE_PESAPAL_SANDBOX_URL,
   CALLBACK_URL: `${import.meta.env.VITE_SITE_URL}/auth/payment/callback`,
-  IPN_ID: 'brickfoundation_reg', // Shortened IPN ID
-  CURRENCY: 'UGX',
-  REGISTRATION_FEE: 900, // Registration fee in UGX
-  IS_SANDBOX: true, // Set to true for testing, false for production
-  BRANCH: 'Kampala', // Branch name for the transaction
-  CHANNEL: 'WEB', // Channel through which the transaction is initiated
-  LANGUAGE: 'en', // Default language
-  REDIRECT_MODE: 'TOP_WINDOW' // Redirect mode for payment page
+  IPN_ID: import.meta.env.VITE_PESAPAL_IPN_ID,
+  CURRENCY: import.meta.env.VITE_PESAPAL_CURRENCY,
+  REGISTRATION_FEE: Number(import.meta.env.VITE_PESAPAL_REGISTRATION_FEE),
+  IS_SANDBOX: import.meta.env.VITE_PESAPAL_IS_SANDBOX === 'true',
+  BRANCH: import.meta.env.VITE_PESAPAL_BRANCH,
+  CHANNEL: import.meta.env.VITE_PESAPAL_CHANNEL,
+  LANGUAGE: import.meta.env.VITE_PESAPAL_LANGUAGE,
+  REDIRECT_MODE: import.meta.env.VITE_PESAPAL_REDIRECT_MODE
 };
