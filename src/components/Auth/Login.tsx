@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../config/supabaseClient';
-import { gradients } from '../../utils/colors';
 import AuthLayout from './AuthLayout';
 
 export default function Login() {
@@ -9,6 +8,9 @@ export default function Login() {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOTP, setShowOTP] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const message = location.state?.message;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -16,34 +18,57 @@ export default function Login() {
     setLoading(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const formData = new FormData(e.currentTarget);
+      
+      if (!showOTP) {
+        // First step: Store credentials and send OTP
+        const emailInput = formData.get('email') as string;
+        const passwordInput = formData.get('password') as string;
+        
+        setEmail(emailInput);
+        setPassword(passwordInput);
 
-      if (error) throw error;
-
-      // Check if email is verified
-      if (!data.user?.email_confirmed_at) {
-        // Send new confirmation email
-        const { error: resendError } = await supabase.auth.resend({
-          type: 'signup',
-          email,
+        // Send OTP
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: emailInput,
+          options: {
+            shouldCreateUser: false,
+          },
         });
 
-        if (resendError) throw resendError;
+        if (otpError) throw otpError;
 
-        setError('Please verify your email first. A new verification email has been sent.');
-        await supabase.auth.signOut();
-        return;
+        setShowOTP(true);
+        setError(null);
+      } else {
+        // Second step: Verify OTP and sign in
+        const otpInput = formData.get('otp') as string;
+
+        // Verify OTP
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email,
+          token: otpInput,
+          type: 'email',
+        });
+
+        if (verifyError) throw verifyError;
+
+        // After OTP verification, proceed with password login
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) throw signInError;
+
+        if (!data.user?.email_confirmed_at) {
+          await supabase.auth.signOut();
+          throw new Error('Please verify your email first.');
+        }
+
+        navigate('/dashboard');
       }
-
-      navigate('/dashboard');
     } catch (error: any) {
       setError(error.message || 'An error occurred during login');
     } finally {
@@ -77,33 +102,65 @@ export default function Login() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
+          {!showOTP ? (
+            <>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label htmlFor="otp" className="block text-sm font-medium text-gray-700">
+                Verification Code
+              </label>
+              <input
+                id="otp"
+                name="otp"
+                type="text"
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="Enter the code sent to your email"
+              />
+              <p className="mt-2 text-sm text-gray-500">
+                Enter the verification code sent to {email}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOTP(false);
+                  setEmail('');
+                  setPassword('');
+                }}
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
+              >
+                Use a different email
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <div className="flex items-center">
@@ -119,53 +176,25 @@ export default function Login() {
             </div>
 
             <div className="text-sm">
-              <Link to="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
+              <Link
+                to="/forgot-password"
+                className="font-medium text-indigo-600 hover:text-indigo-500"
+              >
                 Forgot your password?
               </Link>
             </div>
           </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className={`${
-                gradients.button
-              } w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                gradients.buttonHover
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                loading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+              loading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {loading ? 'Processing...' : (showOTP ? 'Verify Code' : 'Send Code')}
+          </button>
         </form>
-
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <button
-              type="button"
-              className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <img
-                className="h-5 w-5"
-                src="https://www.svgrepo.com/show/475656/google-color.svg"
-                alt="Google logo"
-              />
-              <span>Sign in with Google</span>
-            </button>
-          </div>
-        </div>
       </div>
     </AuthLayout>
   );
