@@ -21,12 +21,27 @@ export default function Login() {
     const password = formData.get('password') as string;
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
+
+      // Check if email is verified
+      if (!data.user?.email_confirmed_at) {
+        // Send new confirmation email
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+        });
+
+        if (resendError) throw resendError;
+
+        setError('Please verify your email first. A new verification email has been sent.');
+        await supabase.auth.signOut();
+        return;
+      }
 
       navigate('/dashboard');
     } catch (error: any) {

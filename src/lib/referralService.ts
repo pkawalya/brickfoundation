@@ -84,7 +84,7 @@ class ReferralServiceClass {
     throw lastError || new Error('Operation failed after retries');
   }
 
-  async getReferralLinks(): Promise<ReferralLink[]> {
+  public async getReferralLinks(): Promise<ReferralLink[]> {
     return this.retryOperation(async () => {
       const user = await this.getSession();
 
@@ -104,7 +104,7 @@ class ReferralServiceClass {
     });
   }
 
-  async createReferralLinks(count: number = 3): Promise<ReferralLink[]> {
+  public async createReferralLinks(count: number = 3): Promise<ReferralLink[]> {
     return this.retryOperation(async () => {
       const user = await this.getSession();
 
@@ -149,7 +149,7 @@ class ReferralServiceClass {
     });
   }
 
-  async getReferrals(): Promise<Referral[]> {
+  public async getReferrals(): Promise<Referral[]> {
     return this.retryOperation(async () => {
       const user = await this.getSession();
 
@@ -175,4 +175,5 @@ class ReferralServiceClass {
   }
 }
 
+// Create and export a single instance
 export const ReferralService = new ReferralServiceClass();
