@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { LandingPage } from './components/landing/LandingPage';
-import { Register } from './components/auth/Register';
+import Register from './components/auth/Register';
 import { Login } from './components/auth/Login';
 import { AdminDashboard } from './components/dashboard/AdminDashboard';
 import { UserDashboard } from './components/dashboard/UserDashboard';

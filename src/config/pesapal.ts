@@ -9,5 +9,7 @@ export const PESAPAL_CONFIG = {
   REGISTRATION_FEE: 900, // Registration fee in UGX
   IS_SANDBOX: true, // Set to true for testing, false for production
   BRANCH: 'Kampala', // Branch name for the transaction
-  CHANNEL: 'WEB' // Channel through which the transaction is initiated
+  CHANNEL: 'WEB', // Channel through which the transaction is initiated
+  LANGUAGE: 'en', // Default language
+  REDIRECT_MODE: 'TOP_WINDOW' // Redirect mode for payment page
 };

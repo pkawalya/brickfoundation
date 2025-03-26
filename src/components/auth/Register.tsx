@@ -1,101 +1,173 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../../config/supabaseClient';
-import { AuthLayout } from './AuthLayout';
+import { supabase } from '../../lib/supabaseClient';
 import { createPesapalOrder } from '../../utils/pesapal';
 import { PESAPAL_CONFIG } from '../../config/pesapal';
+import { AuthLayout } from './AuthLayout';
+import { FaUser, FaEnvelope, FaPhone, FaLock } from 'react-icons/fa';
 
-export function Register() {
+export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [userDetails, setUserDetails] = useState<{
-    firstName: string;
-    lastName: string;
-    phone: string;
-  } | null>(null);
+  const [pendingUser, setPendingUser] = useState<any>(null);
+
+  useEffect(() => {
+    checkPendingPayment();
+  }, []);
+
+  const checkPendingPayment = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('payment_status')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.payment_status === 'pending') {
+        setPendingUser(user);
+      }
+    }
+  };
+
+  const handlePayment = async () => {
+    if (!pendingUser) return;
+
+    setLoading(true);
+    try {
+      const redirectUrl = await createPesapalOrder(
+        pendingUser.id,
+        pendingUser.email,
+        pendingUser.user_metadata.phone,
+        pendingUser.user_metadata.first_name,
+        pendingUser.user_metadata.last_name
+      );
+      window.location.href = redirectUrl;
+    } catch (error) {
+      console.error('Payment error:', error);
+      setError(error instanceof Error ? error.message : 'Payment initiation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (pendingUser) {
+    return (
+      <AuthLayout type="register">
+        <div style={{ width: '100%', maxWidth: '400px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <h2 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#111827' }}>
+              Complete Your Registration
+            </h2>
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#4B5563' }}>
+              Your account is created but payment is pending
+            </p>
+          </div>
+
+          <div style={{ 
+            backgroundColor: '#F3F4F6', 
+            padding: '1rem', 
+            borderRadius: '0.375rem',
+            marginBottom: '1rem'
+          }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#111827', marginBottom: '0.25rem' }}>
+              Registration Fee
+            </h4>
+            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#4F46E5' }}>
+              UGX {PESAPAL_CONFIG.REGISTRATION_FEE.toLocaleString()}
+            </p>
+            <p style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '0.25rem' }}>
+              Payment will be processed via Mobile Money
+            </p>
+          </div>
+
+          {error && (
+            <div style={{ 
+              marginBottom: '1rem', 
+              padding: '0.5rem', 
+              fontSize: '0.875rem', 
+              color: '#B91C1C', 
+              backgroundColor: '#FEE2E2', 
+              borderRadius: '0.375rem',
+              textAlign: 'center'
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handlePayment}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              backgroundColor: loading ? '#9CA3AF' : '#4F46E5',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {loading ? 'Processing...' : 'Pay Now'}
+          </button>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    setLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    const confirmPassword = formData.get('confirmPassword') as string;
+    const firstName = formData.get('firstName') as string;
+    const lastName = formData.get('lastName') as string;
+    const phone = formData.get('phone') as string;
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
 
     try {
-      const formData = new FormData(e.currentTarget);
-      const emailInput = formData.get('email') as string;
-      const passwordInput = formData.get('password') as string;
-      const confirmPassword = formData.get('confirmPassword') as string;
-      const phoneInput = formData.get('phone') as string;
-      const firstNameInput = formData.get('firstName') as string;
-      const lastNameInput = formData.get('lastName') as string;
-
-      if (!firstNameInput || !lastNameInput) {
-        setError('First name and last name are required');
-        return;
-      }
-
-      if (passwordInput !== confirmPassword) {
-        setError('Passwords do not match');
-        return;
-      }
-
-      if (!phoneInput || phoneInput.length !== 10 || !/^\d+$/.test(phoneInput)) {
-        setError('Please enter a valid 10-digit phone number');
-        return;
-      }
-
-      // Create user account
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: emailInput,
-        password: passwordInput,
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
         options: {
           data: {
-            phone: phoneInput,
-            first_name: firstNameInput,
-            last_name: lastNameInput,
-            full_name: `${firstNameInput} ${lastNameInput}`
+            first_name: firstName,
+            last_name: lastName,
+            phone: phone,
+            payment_status: 'pending'
           }
         }
       });
 
-      if (signUpError) {
-        console.error('Signup error:', signUpError);
-        throw new Error(signUpError.message);
-      }
+      if (signUpError) throw signUpError;
+      if (!user) throw new Error('User creation failed');
 
-      if (!signUpData.user) {
-        throw new Error('User account creation failed');
-      }
-
-      // Store user details for payment
-      setUserDetails({
-        firstName: firstNameInput,
-        lastName: lastNameInput,
-        phone: phoneInput
-      });
-
-      // Store email for reference
-      setEmail(emailInput);
-      
-      console.log('Creating PesaPal order for user:', signUpData.user.id);
-      
-      // Immediately proceed to payment since we're using mobile money
+      // Create payment order
       const redirectUrl = await createPesapalOrder(
-        signUpData.user.id,
-        emailInput,
-        phoneInput,
-        firstNameInput,
-        lastNameInput
+        user.id,
+        email,
+        phone,
+        firstName,
+        lastName
       );
 
-      console.log('Redirecting to PesaPal URL:', redirectUrl);
-
-      // Redirect to PesaPal payment page
+      // Redirect to PesaPal
       window.location.href = redirectUrl;
-
-    } catch (error: any) {
+    } catch (error) {
       console.error('Registration error:', error);
-      setError(error.message || 'An error occurred during registration. Please try again.');
+      setError(error instanceof Error ? error.message : 'Registration failed');
+    } finally {
       setLoading(false);
     }
   };
@@ -103,7 +175,7 @@ export function Register() {
   return (
     <AuthLayout type="register">
       <div style={{ width: '100%', maxWidth: '400px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <h2 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#111827' }}>
             Create your account
           </h2>
@@ -118,52 +190,61 @@ export function Register() {
         {error && (
           <div style={{ 
             marginBottom: '1rem', 
-            padding: '1rem', 
+            padding: '0.5rem', 
             fontSize: '0.875rem', 
             color: '#B91C1C', 
             backgroundColor: '#FEE2E2', 
-            borderRadius: '0.5rem' 
+            borderRadius: '0.375rem',
+            textAlign: 'center'
           }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label htmlFor="firstName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                First name
-              </label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }}>
+                <FaUser size={14} />
+              </span>
               <input
                 id="firstName"
                 name="firstName"
                 type="text"
                 autoComplete="given-name"
                 required
+                placeholder="First name"
                 style={{
-                  marginTop: '0.25rem',
                   width: '100%',
-                  padding: '0.5rem',
+                  paddingLeft: '2rem',
+                  paddingRight: '0.75rem',
+                  paddingTop: '0.375rem',
+                  paddingBottom: '0.375rem',
+                  fontSize: '0.875rem',
                   border: '1px solid #D1D5DB',
                   borderRadius: '0.375rem'
                 }}
               />
             </div>
 
-            <div>
-              <label htmlFor="lastName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                Last name
-              </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }}>
+                <FaUser size={14} />
+              </span>
               <input
                 id="lastName"
                 name="lastName"
                 type="text"
                 autoComplete="family-name"
                 required
+                placeholder="Last name"
                 style={{
-                  marginTop: '0.25rem',
                   width: '100%',
-                  padding: '0.5rem',
+                  paddingLeft: '2rem',
+                  paddingRight: '0.75rem',
+                  paddingTop: '0.375rem',
+                  paddingBottom: '0.375rem',
+                  fontSize: '0.875rem',
                   border: '1px solid #D1D5DB',
                   borderRadius: '0.375rem'
                 }}
@@ -171,30 +252,34 @@ export function Register() {
             </div>
           </div>
 
-          <div>
-            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-              Email address
-            </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }}>
+              <FaEnvelope size={14} />
+            </span>
             <input
               id="email"
               name="email"
               type="email"
               autoComplete="email"
               required
+              placeholder="Email address"
               style={{
-                marginTop: '0.25rem',
                 width: '100%',
-                padding: '0.5rem',
+                paddingLeft: '2rem',
+                paddingRight: '0.75rem',
+                paddingTop: '0.375rem',
+                paddingBottom: '0.375rem',
+                fontSize: '0.875rem',
                 border: '1px solid #D1D5DB',
                 borderRadius: '0.375rem'
               }}
             />
           </div>
 
-          <div>
-            <label htmlFor="phone" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-              Mobile Money Number
-            </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }}>
+              <FaPhone size={14} />
+            </span>
             <input
               id="phone"
               name="phone"
@@ -202,24 +287,24 @@ export function Register() {
               autoComplete="tel"
               required
               pattern="[0-9]{10}"
-              placeholder="0712345678"
+              placeholder="Mobile Money Number (e.g., 0712345678)"
               style={{
-                marginTop: '0.25rem',
                 width: '100%',
-                padding: '0.5rem',
+                paddingLeft: '2rem',
+                paddingRight: '0.75rem',
+                paddingTop: '0.375rem',
+                paddingBottom: '0.375rem',
+                fontSize: '0.875rem',
                 border: '1px solid #D1D5DB',
                 borderRadius: '0.375rem'
               }}
             />
-            <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#6B7280' }}>
-              Enter your MTN or Airtel mobile money number (e.g., 0712345678)
-            </p>
           </div>
 
-          <div>
-            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-              Password
-            </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }}>
+              <FaLock size={14} />
+            </span>
             <input
               id="password"
               name="password"
@@ -227,20 +312,24 @@ export function Register() {
               autoComplete="new-password"
               required
               minLength={8}
+              placeholder="Password (min. 8 characters)"
               style={{
-                marginTop: '0.25rem',
                 width: '100%',
-                padding: '0.5rem',
+                paddingLeft: '2rem',
+                paddingRight: '0.75rem',
+                paddingTop: '0.375rem',
+                paddingBottom: '0.375rem',
+                fontSize: '0.875rem',
                 border: '1px solid #D1D5DB',
                 borderRadius: '0.375rem'
               }}
             />
           </div>
 
-          <div>
-            <label htmlFor="confirmPassword" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-              Confirm Password
-            </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#6B7280' }}>
+              <FaLock size={14} />
+            </span>
             <input
               id="confirmPassword"
               name="confirmPassword"
@@ -248,25 +337,34 @@ export function Register() {
               autoComplete="new-password"
               required
               minLength={8}
+              placeholder="Confirm password"
               style={{
-                marginTop: '0.25rem',
                 width: '100%',
-                padding: '0.5rem',
+                paddingLeft: '2rem',
+                paddingRight: '0.75rem',
+                paddingTop: '0.375rem',
+                paddingBottom: '0.375rem',
+                fontSize: '0.875rem',
                 border: '1px solid #D1D5DB',
                 borderRadius: '0.375rem'
               }}
             />
           </div>
 
-          <div style={{ backgroundColor: '#F3F4F6', padding: '1rem', borderRadius: '0.5rem' }}>
-            <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#111827', marginBottom: '0.5rem' }}>
+          <div style={{ 
+            backgroundColor: '#F3F4F6', 
+            padding: '0.75rem', 
+            borderRadius: '0.375rem',
+            marginTop: '0.5rem'
+          }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#111827', marginBottom: '0.25rem' }}>
               Registration Fee
             </h4>
-            <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#4F46E5' }}>
+            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#4F46E5' }}>
               UGX {PESAPAL_CONFIG.REGISTRATION_FEE.toLocaleString()}
             </p>
-            <p style={{ fontSize: '0.875rem', color: '#6B7280', marginTop: '0.5rem' }}>
-              Payment will be processed via Mobile Money using the number provided above
+            <p style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '0.25rem' }}>
+              Payment will be processed via Mobile Money
             </p>
           </div>
 
@@ -281,7 +379,8 @@ export function Register() {
               borderRadius: '0.375rem',
               fontSize: '0.875rem',
               fontWeight: '500',
-              cursor: loading ? 'not-allowed' : 'pointer'
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginTop: '0.5rem'
             }}
           >
             {loading ? 'Processing...' : 'Register & Pay'}
