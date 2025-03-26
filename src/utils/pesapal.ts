@@ -14,6 +14,8 @@ interface PesapalOrderRequest {
   description: string;
   callback_url: string;
   notification_id: string;
+  branch: string;
+  channel: string;
   billing_address: {
     email_address: string;
     phone_number: string;
@@ -21,11 +23,9 @@ interface PesapalOrderRequest {
     first_name: string;
     last_name: string;
     line_1: string;
-    line_2?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-    zip_code?: string;
+    city: string;
+    state: string;
+    postal_code: string;
   };
 }
 
@@ -102,17 +102,18 @@ export async function createPesapalOrder(
       description: 'Brick Foundation Registration Fee',
       callback_url: PESAPAL_CONFIG.CALLBACK_URL,
       notification_id: PESAPAL_CONFIG.IPN_ID,
+      branch: PESAPAL_CONFIG.BRANCH,
+      channel: PESAPAL_CONFIG.CHANNEL,
       billing_address: {
         email_address: email,
         phone_number: formattedPhone,
         country_code: 'UG',
         first_name: firstName,
         last_name: lastName,
-        line_1: 'N/A', // Required by PesaPal
-        city: 'Kampala', // Default to Kampala
+        line_1: 'Kampala', // Default address line
+        city: 'Kampala',
         state: 'Kampala',
-        postal_code: '256',
-        zip_code: '256'
+        postal_code: '256'
       }
     };
 
@@ -130,13 +131,15 @@ export async function createPesapalOrder(
       body: JSON.stringify(orderRequest)
     });
 
+    const responseText = await response.text();
+    console.log('Raw response:', responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('PesaPal order error response:', errorText);
+      console.error('PesaPal order error response:', responseText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data: PesapalOrderResponse = await response.json();
+    const data: PesapalOrderResponse = JSON.parse(responseText);
     console.log('Order response:', data);
 
     if (data.error || !data.redirect_url) {

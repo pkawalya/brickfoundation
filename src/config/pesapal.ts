@@ -7,5 +7,7 @@ export const PESAPAL_CONFIG = {
   IPN_ID: 'brickfoundation_reg', // Shortened IPN ID
   CURRENCY: 'UGX',
   REGISTRATION_FEE: 900, // Registration fee in UGX
-  IS_SANDBOX: true // Set to true for testing, false for production
+  IS_SANDBOX: true, // Set to true for testing, false for production
+  BRANCH: 'Kampala', // Branch name for the transaction
+  CHANNEL: 'WEB' // Channel through which the transaction is initiated
 };
